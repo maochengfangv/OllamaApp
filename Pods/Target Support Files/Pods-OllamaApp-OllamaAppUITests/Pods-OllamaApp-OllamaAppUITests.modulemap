@@ -1,0 +1,6 @@
+framework module Pods_OllamaApp_OllamaAppUITests {
+  umbrella header "Pods-OllamaApp-OllamaAppUITests-umbrella.h"
+
+  export *
+  module * { export * }
+}

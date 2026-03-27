@@ -1,0 +1,689 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1C7C2A95D5BA91D04BA9FC0F /* Pods_OllamaAppTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E4BA47FA377B82627895669 /* Pods_OllamaAppTests.framework */; };
+		880A0313E9F9A86A67E48806 /* Pods_OllamaApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5BF1B10BBBF3E3D67964034F /* Pods_OllamaApp.framework */; };
+		D22E60F1B6C2B453B5847CA3 /* Pods_OllamaApp_OllamaAppUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 78353EDB2FCC89D04A13899F /* Pods_OllamaApp_OllamaAppUITests.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0C31218D2F76B496000C0C00 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0C3121742F76B493000C0C00 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C31217B2F76B493000C0C00;
+			remoteInfo = OllamaApp;
+		};
+		0C3121972F76B496000C0C00 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0C3121742F76B493000C0C00 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C31217B2F76B493000C0C00;
+			remoteInfo = OllamaApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0C31217C2F76B493000C0C00 /* OllamaApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OllamaApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C31218C2F76B496000C0C00 /* OllamaAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OllamaAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C3121962F76B496000C0C00 /* OllamaAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OllamaAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		108C170B82B3112FA251B05D /* Pods-OllamaAppTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OllamaAppTests.release.xcconfig"; path = "Target Support Files/Pods-OllamaAppTests/Pods-OllamaAppTests.release.xcconfig"; sourceTree = "<group>"; };
+		44CB93512989E4E5D2249585 /* Pods-OllamaApp-OllamaAppUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OllamaApp-OllamaAppUITests.release.xcconfig"; path = "Target Support Files/Pods-OllamaApp-OllamaAppUITests/Pods-OllamaApp-OllamaAppUITests.release.xcconfig"; sourceTree = "<group>"; };
+		4EF7EC44103DDC0C413720D9 /* Pods-OllamaApp-OllamaAppUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OllamaApp-OllamaAppUITests.debug.xcconfig"; path = "Target Support Files/Pods-OllamaApp-OllamaAppUITests/Pods-OllamaApp-OllamaAppUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		5BF1B10BBBF3E3D67964034F /* Pods_OllamaApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OllamaApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		6790059B4ABC740B50E28800 /* Pods-OllamaApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OllamaApp.release.xcconfig"; path = "Target Support Files/Pods-OllamaApp/Pods-OllamaApp.release.xcconfig"; sourceTree = "<group>"; };
+		78353EDB2FCC89D04A13899F /* Pods_OllamaApp_OllamaAppUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OllamaApp_OllamaAppUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E4BA47FA377B82627895669 /* Pods_OllamaAppTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_OllamaAppTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E5DE71F7C412A71E89DF26C /* Pods-OllamaAppTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OllamaAppTests.debug.xcconfig"; path = "Target Support Files/Pods-OllamaAppTests/Pods-OllamaAppTests.debug.xcconfig"; sourceTree = "<group>"; };
+		BA94463511D8C7B3C5643ED1 /* Pods-OllamaApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OllamaApp.debug.xcconfig"; path = "Target Support Files/Pods-OllamaApp/Pods-OllamaApp.debug.xcconfig"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0C3121EE2F76BD56000C0C00 /* Exceptions for "OllamaApp" folder in "OllamaApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0C31217B2F76B493000C0C00 /* OllamaApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0C31217E2F76B493000C0C00 /* OllamaApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0C3121EE2F76BD56000C0C00 /* Exceptions for "OllamaApp" folder in "OllamaApp" target */,
+			);
+			path = OllamaApp;
+			sourceTree = "<group>";
+		};
+		0C31218F2F76B496000C0C00 /* OllamaAppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OllamaAppTests;
+			sourceTree = "<group>";
+		};
+		0C3121992F76B496000C0C00 /* OllamaAppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OllamaAppUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0C3121792F76B493000C0C00 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				880A0313E9F9A86A67E48806 /* Pods_OllamaApp.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C3121892F76B496000C0C00 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C7C2A95D5BA91D04BA9FC0F /* Pods_OllamaAppTests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C3121932F76B496000C0C00 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D22E60F1B6C2B453B5847CA3 /* Pods_OllamaApp_OllamaAppUITests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0C3121732F76B493000C0C00 = {
+			isa = PBXGroup;
+			children = (
+				0C31217E2F76B493000C0C00 /* OllamaApp */,
+				0C31218F2F76B496000C0C00 /* OllamaAppTests */,
+				0C3121992F76B496000C0C00 /* OllamaAppUITests */,
+				0C31217D2F76B493000C0C00 /* Products */,
+				42A65B675BB9EB004DACC3A5 /* Pods */,
+				9E8F333D74D066BA0E6ACD38 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		0C31217D2F76B493000C0C00 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0C31217C2F76B493000C0C00 /* OllamaApp.app */,
+				0C31218C2F76B496000C0C00 /* OllamaAppTests.xctest */,
+				0C3121962F76B496000C0C00 /* OllamaAppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		42A65B675BB9EB004DACC3A5 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				BA94463511D8C7B3C5643ED1 /* Pods-OllamaApp.debug.xcconfig */,
+				6790059B4ABC740B50E28800 /* Pods-OllamaApp.release.xcconfig */,
+				4EF7EC44103DDC0C413720D9 /* Pods-OllamaApp-OllamaAppUITests.debug.xcconfig */,
+				44CB93512989E4E5D2249585 /* Pods-OllamaApp-OllamaAppUITests.release.xcconfig */,
+				9E5DE71F7C412A71E89DF26C /* Pods-OllamaAppTests.debug.xcconfig */,
+				108C170B82B3112FA251B05D /* Pods-OllamaAppTests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		9E8F333D74D066BA0E6ACD38 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5BF1B10BBBF3E3D67964034F /* Pods_OllamaApp.framework */,
+				78353EDB2FCC89D04A13899F /* Pods_OllamaApp_OllamaAppUITests.framework */,
+				9E4BA47FA377B82627895669 /* Pods_OllamaAppTests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0C31217B2F76B493000C0C00 /* OllamaApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C3121A02F76B496000C0C00 /* Build configuration list for PBXNativeTarget "OllamaApp" */;
+			buildPhases = (
+				F7495FEA2E514081FBDB4A47 /* [CP] Check Pods Manifest.lock */,
+				0C3121782F76B493000C0C00 /* Sources */,
+				0C3121792F76B493000C0C00 /* Frameworks */,
+				0C31217A2F76B493000C0C00 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0C31217E2F76B493000C0C00 /* OllamaApp */,
+			);
+			name = OllamaApp;
+			productName = OllamaApp;
+			productReference = 0C31217C2F76B493000C0C00 /* OllamaApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0C31218B2F76B496000C0C00 /* OllamaAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C3121A32F76B496000C0C00 /* Build configuration list for PBXNativeTarget "OllamaAppTests" */;
+			buildPhases = (
+				40AFBB7082144CE585B9BFCF /* [CP] Check Pods Manifest.lock */,
+				0C3121882F76B496000C0C00 /* Sources */,
+				0C3121892F76B496000C0C00 /* Frameworks */,
+				0C31218A2F76B496000C0C00 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0C31218E2F76B496000C0C00 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0C31218F2F76B496000C0C00 /* OllamaAppTests */,
+			);
+			name = OllamaAppTests;
+			productName = OllamaAppTests;
+			productReference = 0C31218C2F76B496000C0C00 /* OllamaAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		0C3121952F76B496000C0C00 /* OllamaAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0C3121A62F76B496000C0C00 /* Build configuration list for PBXNativeTarget "OllamaAppUITests" */;
+			buildPhases = (
+				00B4C746397CAFA73BC202E6 /* [CP] Check Pods Manifest.lock */,
+				0C3121922F76B496000C0C00 /* Sources */,
+				0C3121932F76B496000C0C00 /* Frameworks */,
+				0C3121942F76B496000C0C00 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0C3121982F76B496000C0C00 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0C3121992F76B496000C0C00 /* OllamaAppUITests */,
+			);
+			name = OllamaAppUITests;
+			productName = OllamaAppUITests;
+			productReference = 0C3121962F76B496000C0C00 /* OllamaAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0C3121742F76B493000C0C00 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					0C31217B2F76B493000C0C00 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					0C31218B2F76B496000C0C00 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 0C31217B2F76B493000C0C00;
+					};
+					0C3121952F76B496000C0C00 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 0C31217B2F76B493000C0C00;
+					};
+				};
+			};
+			buildConfigurationList = 0C3121772F76B493000C0C00 /* Build configuration list for PBXProject "OllamaApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0C3121732F76B493000C0C00;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0C31217D2F76B493000C0C00 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0C31217B2F76B493000C0C00 /* OllamaApp */,
+				0C31218B2F76B496000C0C00 /* OllamaAppTests */,
+				0C3121952F76B496000C0C00 /* OllamaAppUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0C31217A2F76B493000C0C00 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C31218A2F76B496000C0C00 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C3121942F76B496000C0C00 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		00B4C746397CAFA73BC202E6 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OllamaApp-OllamaAppUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		40AFBB7082144CE585B9BFCF /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OllamaAppTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		F7495FEA2E514081FBDB4A47 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OllamaApp-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0C3121782F76B493000C0C00 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C3121882F76B496000C0C00 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0C3121922F76B496000C0C00 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0C31218E2F76B496000C0C00 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C31217B2F76B493000C0C00 /* OllamaApp */;
+			targetProxy = 0C31218D2F76B496000C0C00 /* PBXContainerItemProxy */;
+		};
+		0C3121982F76B496000C0C00 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C31217B2F76B493000C0C00 /* OllamaApp */;
+			targetProxy = 0C3121972F76B496000C0C00 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0C31219E2F76B496000C0C00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		0C31219F2F76B496000C0C00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		0C3121A12F76B496000C0C00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BA94463511D8C7B3C5643ED1 /* Pods-OllamaApp.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"OllamaApp/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OllamaApp/Info.plist;
+				INFOPLIST_KEY_NSAppTransportSecurity = "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.OllamaApp.OllamaApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0C3121A22F76B496000C0C00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6790059B4ABC740B50E28800 /* Pods-OllamaApp.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"OllamaApp/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OllamaApp/Info.plist;
+				INFOPLIST_KEY_NSAppTransportSecurity = "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.OllamaApp.OllamaApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		0C3121A42F76B496000C0C00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9E5DE71F7C412A71E89DF26C /* Pods-OllamaAppTests.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.OllamaApp.OllamaAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OllamaApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OllamaApp";
+			};
+			name = Debug;
+		};
+		0C3121A52F76B496000C0C00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 108C170B82B3112FA251B05D /* Pods-OllamaAppTests.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.OllamaApp.OllamaAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OllamaApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OllamaApp";
+			};
+			name = Release;
+		};
+		0C3121A72F76B496000C0C00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4EF7EC44103DDC0C413720D9 /* Pods-OllamaApp-OllamaAppUITests.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.OllamaApp.OllamaAppUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OllamaApp;
+			};
+			name = Debug;
+		};
+		0C3121A82F76B496000C0C00 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 44CB93512989E4E5D2249585 /* Pods-OllamaApp-OllamaAppUITests.release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maocf.OllamaApp.OllamaAppUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OllamaApp;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0C3121772F76B493000C0C00 /* Build configuration list for PBXProject "OllamaApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C31219E2F76B496000C0C00 /* Debug */,
+				0C31219F2F76B496000C0C00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0C3121A02F76B496000C0C00 /* Build configuration list for PBXNativeTarget "OllamaApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C3121A12F76B496000C0C00 /* Debug */,
+				0C3121A22F76B496000C0C00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0C3121A32F76B496000C0C00 /* Build configuration list for PBXNativeTarget "OllamaAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C3121A42F76B496000C0C00 /* Debug */,
+				0C3121A52F76B496000C0C00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0C3121A62F76B496000C0C00 /* Build configuration list for PBXNativeTarget "OllamaAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C3121A72F76B496000C0C00 /* Debug */,
+				0C3121A82F76B496000C0C00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0C3121742F76B493000C0C00 /* Project object */;
+}

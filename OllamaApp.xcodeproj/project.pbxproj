@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C0679D82FD55D53008B4364 /* project_arch.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C0679D72FD55D34008B4364 /* project_arch.md */; };
 		1C7C2A95D5BA91D04BA9FC0F /* Pods_OllamaAppTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9E4BA47FA377B82627895669 /* Pods_OllamaAppTests.framework */; };
 		880A0313E9F9A86A67E48806 /* Pods_OllamaApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5BF1B10BBBF3E3D67964034F /* Pods_OllamaApp.framework */; };
 		D22E60F1B6C2B453B5847CA3 /* Pods_OllamaApp_OllamaAppUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 78353EDB2FCC89D04A13899F /* Pods_OllamaApp_OllamaAppUITests.framework */; };
@@ -30,6 +31,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0C0679D72FD55D34008B4364 /* project_arch.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = project_arch.md; sourceTree = "<group>"; };
 		0C31217C2F76B493000C0C00 /* OllamaApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OllamaApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C31218C2F76B496000C0C00 /* OllamaAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OllamaAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C3121962F76B496000C0C00 /* OllamaAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OllamaAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +108,7 @@
 		0C3121732F76B493000C0C00 = {
 			isa = PBXGroup;
 			children = (
+				0C0679D72FD55D34008B4364 /* project_arch.md */,
 				0C31217E2F76B493000C0C00 /* OllamaApp */,
 				0C31218F2F76B496000C0C00 /* OllamaAppTests */,
 				0C3121992F76B496000C0C00 /* OllamaAppUITests */,
@@ -265,6 +268,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0C0679D82FD55D53008B4364 /* project_arch.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

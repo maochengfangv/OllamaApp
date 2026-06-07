@@ -27,7 +27,15 @@ struct OllamaChatView: View {
             ScrollViewReader { proxy in
                 List {
                     ForEach(manager.messages) { message in
-                        ChatMessageRow(message: message, isGenerating: manager.isGenerating)
+                        ChatMessageRow(
+                            message: message,
+                            isGenerating: manager.isGenerating,
+                            onResend: message.role == .user ? {
+                                Task {
+                                    await manager.resend(messageId: message.id, model: selectedModel)
+                                }
+                            } : nil
+                        )
                         .id(message.id)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
@@ -139,7 +147,15 @@ struct DeepSeekChatView: View {
             ScrollViewReader { proxy in
                 List {
                     ForEach(manager.messages) { message in
-                        ChatMessageRow(message: message, isGenerating: manager.isGenerating)
+                        ChatMessageRow(
+                            message: message,
+                            isGenerating: manager.isGenerating,
+                            onResend: message.role == .user ? {
+                                Task {
+                                    await manager.resend(messageId: message.id, model: selectedModel, webEnabled: isWebEnabled)
+                                }
+                            } : nil
+                        )
                         .id(message.id)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
@@ -390,6 +406,7 @@ struct DeepSeekSettingsView: View {
 struct ChatMessageRow: View {
     let message: ChatMessage
     let isGenerating: Bool
+    let onResend: (() -> Void)?
     @State private var didCopy: Bool = false
 
     var body: some View {
@@ -397,6 +414,12 @@ struct ChatMessageRow: View {
             if message.role == .user {
                 Spacer(minLength: 50)
                 bubble(background: Color.blue, foreground: .white)
+                    .contextMenu {
+                        if let onResend {
+                            Button("重新发送", action: onResend)
+                                .disabled(isGenerating)
+                        }
+                    }
             } else {
                 bubble(background: Color.gray.opacity(0.15), foreground: .primary)
                 Spacer(minLength: 50)

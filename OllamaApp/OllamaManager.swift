@@ -135,6 +135,42 @@ class OllamaManager: ObservableObject {
         isGenerating = false
         updateCurrentSession()
     }
+
+    func resend(messageId: UUID, model: String, webEnabled: Bool = false) async {
+        guard !isGenerating else { return }
+        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        guard messages[index].role == .user else { return }
+
+        let trimmedPrompt = messages[index].content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return }
+
+        isGenerating = true
+        messages = Array(messages.prefix(index + 1))
+        messages.append(ChatMessage(role: .model, content: ""))
+
+        currentTask = Task {
+            do {
+                switch self.provider {
+                case .ollama:
+                    try await self.generateWithOllama(prompt: trimmedPrompt, model: model)
+                case .deepseek:
+                    try await self.generateWithDeepSeek(model: model, webEnabled: webEnabled, query: trimmedPrompt)
+                }
+            } catch {
+                if let lastIndex = self.messages.indices.last {
+                    if Task.isCancelled {
+                        self.messages[lastIndex].content += "\n[Stopped]"
+                    } else {
+                        print("Error: \(error)")
+                        self.messages[lastIndex].content = "Error: \(error.localizedDescription)"
+                    }
+                }
+                self.isGenerating = false
+                self.updateCurrentSession()
+            }
+        }
+        await currentTask?.value
+    }
     
     func generate(prompt: String, model: String, webEnabled: Bool = false) async {
         self.isGenerating = true

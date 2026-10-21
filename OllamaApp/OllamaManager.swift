@@ -1,24 +1,12 @@
 import Foundation
+import OSLog
 import Security
-
-struct OllamaRequest: Codable {
-    let model: String
-    let prompt: String
-    let stream: Bool
-}
-
-struct OllamaResponse: Codable {
-    let model: String
-    let created_at: String
-    let response: String
-    let done: Bool
-}
 
 struct ChatMessage: Identifiable, Equatable, Codable {
     var id = UUID()
     let role: MessageRole
     var content: String
-    
+
     enum MessageRole: String, Codable {
         case user, model
     }
@@ -36,6 +24,300 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
     case deepseek
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .ollama:
+            return "Ollama"
+        case .deepseek:
+            return "DeepSeek"
+        }
+    }
+
+    var historyTitle: String {
+        "\(displayName) History"
+    }
+
+    var newChatTitle: String {
+        "New \(displayName) Chat"
+    }
+
+    var selectedModelKey: String {
+        switch self {
+        case .ollama:
+            return "SelectedOllamaModel"
+        case .deepseek:
+            return "SelectedDeepSeekModel"
+        }
+    }
+
+    var defaultModel: String {
+        switch self {
+        case .ollama:
+            return "phi3"
+        case .deepseek:
+            return "deepseek-v4-flash"
+        }
+    }
+
+    var modelPlaceholder: String {
+        switch self {
+        case .ollama:
+            return "Model (e.g. llama3)"
+        case .deepseek:
+            return "Model (e.g. deepseek-v4-flash)"
+        }
+    }
+
+    var accentColorName: String {
+        switch self {
+        case .ollama:
+            return "blue"
+        case .deepseek:
+            return "green"
+        }
+    }
+
+    var supportsWebEnhancement: Bool {
+        self == .deepseek
+    }
+}
+
+struct LLMGenerateRequest {
+    let prompt: String
+    let model: String
+    let webEnabled: Bool
+}
+
+enum LLMResponseEvent {
+    case preview(String)
+    case delta(String)
+}
+
+protocol LLMGeneratingProvider {
+    var provider: LLMProvider { get }
+    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error>
+}
+
+enum ChatTelemetryEvent: Equatable {
+    case generationStarted(provider: LLMProvider, model: String, webEnabled: Bool, historyCount: Int)
+    case generationCompleted(provider: LLMProvider, model: String, durationMs: Int, outputLength: Int)
+    case generationCancelled(provider: LLMProvider, model: String, durationMs: Int, outputLength: Int)
+    case generationFailed(provider: LLMProvider, model: String, durationMs: Int, message: String)
+    case sessionLoaded(provider: LLMProvider, sessionId: String, messageCount: Int)
+    case sessionDeleted(provider: LLMProvider, sessionId: String)
+    case legacyHistoryMigrated(provider: LLMProvider, sessionCount: Int)
+
+    var name: String {
+        switch self {
+        case .generationStarted: return "generation_started"
+        case .generationCompleted: return "generation_completed"
+        case .generationCancelled: return "generation_cancelled"
+        case .generationFailed: return "generation_failed"
+        case .sessionLoaded: return "session_loaded"
+        case .sessionDeleted: return "session_deleted"
+        case .legacyHistoryMigrated: return "legacy_history_migrated"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .generationStarted(let provider, let model, let webEnabled, let historyCount):
+            return "provider=\(provider.rawValue) model=\(model) webEnabled=\(webEnabled) historyCount=\(historyCount)"
+        case .generationCompleted(let provider, let model, let durationMs, let outputLength):
+            return "provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) outputLength=\(outputLength)"
+        case .generationCancelled(let provider, let model, let durationMs, let outputLength):
+            return "provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) outputLength=\(outputLength)"
+        case .generationFailed(let provider, let model, let durationMs, let message):
+            return "provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) error=\(message)"
+        case .sessionLoaded(let provider, let sessionId, let messageCount):
+            return "provider=\(provider.rawValue) sessionId=\(sessionId) messageCount=\(messageCount)"
+        case .sessionDeleted(let provider, let sessionId):
+            return "provider=\(provider.rawValue) sessionId=\(sessionId)"
+        case .legacyHistoryMigrated(let provider, let sessionCount):
+            return "provider=\(provider.rawValue) sessionCount=\(sessionCount)"
+        }
+    }
+}
+
+protocol ChatTelemetryRecording {
+    func record(_ event: ChatTelemetryEvent)
+}
+
+final class ChatTelemetryRecorder: ChatTelemetryRecording {
+    static let shared = ChatTelemetryRecorder()
+
+    private let logger: Logger
+
+    init(subsystem: String = Bundle.main.bundleIdentifier ?? "OllamaApp", category: String = "LLM") {
+        self.logger = Logger(subsystem: subsystem, category: category)
+    }
+
+    func record(_ event: ChatTelemetryEvent) {
+        logger.info("\(event.name, privacy: .public) \(event.message, privacy: .public)")
+    }
+}
+
+struct ChatSessionIndexItem: Codable, Equatable {
+    let id: String
+    let title: String
+    let date: Date
+}
+
+final class ChatSessionStore {
+    private let provider: LLMProvider
+    private let fileManager = FileManager.default
+    private let legacyKeys: [String]
+    private let userDefaults: UserDefaults
+    private let rootDirectoryOverride: URL?
+    private let telemetry: any ChatTelemetryRecording
+
+    init(
+        provider: LLMProvider,
+        legacyKeys: [String],
+        userDefaults: UserDefaults = .standard,
+        rootDirectoryOverride: URL? = nil,
+        telemetry: any ChatTelemetryRecording = ChatTelemetryRecorder.shared
+    ) {
+        self.provider = provider
+        self.legacyKeys = legacyKeys
+        self.userDefaults = userDefaults
+        self.rootDirectoryOverride = rootDirectoryOverride
+        self.telemetry = telemetry
+    }
+
+    func loadSessionSummaries() -> [ChatSession] {
+        migrateLegacyHistoryIfNeeded()
+
+        let items = loadIndexItems()
+        return items.map {
+            ChatSession(id: $0.id, messages: [], title: $0.title, date: $0.date)
+        }
+    }
+
+    func loadSession(id: String) -> ChatSession? {
+        let url = sessionFileURL(for: id)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(ChatSession.self, from: data)
+    }
+
+    func saveSession(_ session: ChatSession) {
+        ensureBaseDirectory()
+        let url = sessionFileURL(for: session.id)
+        do {
+            let data = try JSONEncoder().encode(session)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            print("Failed to save session \(session.id): \(error)")
+        }
+    }
+
+    func deleteSession(id: String) {
+        let url = sessionFileURL(for: id)
+        if fileManager.fileExists(atPath: url.path) {
+            do {
+                try fileManager.removeItem(at: url)
+            } catch {
+                print("Failed to delete session \(id): \(error)")
+            }
+        }
+    }
+
+    func saveIndex(from summaries: [ChatSession]) {
+        ensureBaseDirectory()
+        let items = summaries.map { ChatSessionIndexItem(id: $0.id, title: $0.title, date: $0.date) }
+        do {
+            let data = try JSONEncoder().encode(items)
+            try data.write(to: indexFileURL, options: .atomic)
+        } catch {
+            print("Failed to save session index: \(error)")
+        }
+    }
+
+    private func migrateLegacyHistoryIfNeeded() {
+        guard !fileManager.fileExists(atPath: indexFileURL.path) else { return }
+
+        for key in legacyKeys {
+            guard let data = userDefaults.data(forKey: key),
+                  let sessions = try? JSONDecoder().decode([ChatSession].self, from: data),
+                  !sessions.isEmpty else {
+                continue
+            }
+
+            ensureBaseDirectory()
+            for session in sessions {
+                saveSession(session)
+            }
+            saveIndex(from: sessions.sorted(by: { $0.date > $1.date }))
+            telemetry.record(.legacyHistoryMigrated(provider: provider, sessionCount: sessions.count))
+            return
+        }
+    }
+
+    private func loadIndexItems() -> [ChatSessionIndexItem] {
+        ensureBaseDirectory()
+        guard let data = try? Data(contentsOf: indexFileURL),
+              let items = try? JSONDecoder().decode([ChatSessionIndexItem].self, from: data) else {
+            return []
+        }
+        return items.sorted(by: { $0.date > $1.date })
+    }
+
+    private var baseDirectoryURL: URL {
+        let root = rootDirectoryOverride ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return root
+            .appendingPathComponent("ChatSessions", isDirectory: true)
+            .appendingPathComponent(provider.rawValue, isDirectory: true)
+    }
+
+    private var indexFileURL: URL {
+        baseDirectoryURL.appendingPathComponent("index.json")
+    }
+
+    private func sessionFileURL(for id: String) -> URL {
+        baseDirectoryURL.appendingPathComponent("\(id).json")
+    }
+
+    private func ensureBaseDirectory() {
+        guard !fileManager.fileExists(atPath: baseDirectoryURL.path) else { return }
+        do {
+            try fileManager.createDirectory(at: baseDirectoryURL, withIntermediateDirectories: true)
+        } catch {
+            print("Failed to create chat session directory: \(error)")
+        }
+    }
+}
+
+private enum LLMProviderError: LocalizedError {
+    case invalidURL(String)
+    case invalidResponse(String)
+    case server(statusCode: Int, details: String)
+    case missingAPIKey(String)
+    case decodingFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL(let message),
+             .invalidResponse(let message),
+             .missingAPIKey(let message),
+             .decodingFailed(let message):
+            return message
+        case .server(let statusCode, let details):
+            return "请求失败：\(statusCode)\n\(details)"
+        }
+    }
+}
+
+private enum LLMProviderFactory {
+    static func makeProvider(for provider: LLMProvider) -> any LLMGeneratingProvider {
+        switch provider {
+        case .ollama:
+            return OllamaProviderClient()
+        case .deepseek:
+            return DeepSeekProviderClient(contextBuilder: WebSearchContextBuilder())
+        }
+    }
 }
 
 @MainActor
@@ -43,95 +325,97 @@ class OllamaManager: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isGenerating: Bool = false
     @Published var chatHistory: [ChatSession] = []
-    
+
     let provider: LLMProvider
 
     var currentSessionId: String?
-    private let historyKey: String
-    
+    private let providerClient: any LLMGeneratingProvider
+    private let sessionStore: ChatSessionStore
+    private let telemetry: any ChatTelemetryRecording
+
     private var currentTask: Task<Void, Never>?
-    
-    // Use 127.0.0.1 instead of localhost because Ollama listens on IPv4 by default, 
-    // and iOS simulator might resolve localhost to IPv6 (::1), causing connection refused.
-    private let baseURL = "http://127.0.0.1:11434/api/generate"
-    private let deepSeekBaseURLKey = "DeepSeekBaseURL"
-    
-    init(provider: LLMProvider) {
+    private var currentGenerationID: UUID?
+
+    init(
+        provider: LLMProvider,
+        providerClient: (any LLMGeneratingProvider)? = nil,
+        sessionStore: ChatSessionStore? = nil,
+        telemetry: any ChatTelemetryRecording = ChatTelemetryRecorder.shared
+    ) {
         self.provider = provider
-        self.historyKey = "ChatHistory_" + provider.rawValue
+        self.telemetry = telemetry
+        self.providerClient = providerClient ?? LLMProviderFactory.makeProvider(for: provider)
+        self.sessionStore = sessionStore ?? ChatSessionStore(
+            provider: provider,
+            legacyKeys: provider == .ollama ? ["ChatHistory_ollama", "OllamaChatHistory"] : ["ChatHistory_\(provider.rawValue)"],
+            telemetry: telemetry
+        )
         loadHistory()
     }
-    
+
     func startNewChat() {
+        stopGenerating(invalidateGenerationState: true)
         messages = []
         currentSessionId = nil
     }
-    
-    func loadChat(session: ChatSession) {
-        messages = session.messages
-        currentSessionId = session.id
-    }
-    
-    private func saveHistory() {
-        do {
-            let data = try JSONEncoder().encode(chatHistory)
-            UserDefaults.standard.set(data, forKey: historyKey)
-        } catch {
-            print("Failed to save history: \(error)")
-        }
-    }
-    
-    private func loadHistory() {
-        var data = UserDefaults.standard.data(forKey: historyKey)
-        if data == nil, provider == .ollama {
-            data = UserDefaults.standard.data(forKey: "OllamaChatHistory")
-            if let data {
-                UserDefaults.standard.set(data, forKey: historyKey)
-            }
-        }
 
-        guard let data else { return }
-        do {
-            chatHistory = try JSONDecoder().decode([ChatSession].self, from: data)
-        } catch {
-            print("Failed to load history: \(error)")
-        }
+    func loadChat(session: ChatSession) {
+        stopGenerating(invalidateGenerationState: true)
+        let storedSession = sessionStore.loadSession(id: session.id) ?? session
+        messages = storedSession.messages
+        currentSessionId = storedSession.id
+        telemetry.record(.sessionLoaded(provider: provider, sessionId: storedSession.id, messageCount: storedSession.messages.count))
     }
-    
+
+    private func loadHistory() {
+        chatHistory = sessionStore.loadSessionSummaries()
+    }
+
     func deleteHistory(at offsets: IndexSet) {
+        let idsToDelete = offsets.compactMap { index in
+            chatHistory.indices.contains(index) ? chatHistory[index].id : nil
+        }
         chatHistory.remove(atOffsets: offsets)
-        saveHistory()
-        
-        // If the current session was deleted, start a new chat
+        idsToDelete.forEach { sessionStore.deleteSession(id: $0) }
+        idsToDelete.forEach { telemetry.record(.sessionDeleted(provider: provider, sessionId: $0)) }
+        sessionStore.saveIndex(from: chatHistory)
+
         if let currentId = currentSessionId, !chatHistory.contains(where: { $0.id == currentId }) {
             startNewChat()
         }
     }
-    
+
     private func updateCurrentSession() {
         guard !messages.isEmpty else { return }
-        
+
         let title = messages.last(where: { $0.role == .user })?.content ?? "New Chat"
         let shortTitle = String(title.prefix(15)) + (title.count > 15 ? "..." : "")
-        
-        if let sessionId = currentSessionId {
-            if let index = chatHistory.firstIndex(where: { $0.id == sessionId }) {
-                chatHistory[index].messages = messages
-                chatHistory[index].title = shortTitle
-            }
+
+        let sessionDate = Date()
+        let sessionId: String
+        if let currentSessionId {
+            sessionId = currentSessionId
         } else {
             let newSessionId = UUID().uuidString
             currentSessionId = newSessionId
-            let newSession = ChatSession(id: newSessionId, messages: messages, title: shortTitle, date: Date())
-            chatHistory.insert(newSession, at: 0) // Stack-like, newest at the top
+            sessionId = newSessionId
         }
-        
-        saveHistory()
+
+        let fullSession = ChatSession(id: sessionId, messages: messages, title: shortTitle, date: sessionDate)
+        sessionStore.saveSession(fullSession)
+
+        let summary = makeSessionSummary(from: fullSession)
+        chatHistory.removeAll(where: { $0.id == sessionId })
+        chatHistory.insert(summary, at: 0)
+        sessionStore.saveIndex(from: chatHistory)
     }
-    
-    func stopGenerating() {
+
+    func stopGenerating(invalidateGenerationState: Bool = false) {
         currentTask?.cancel()
         currentTask = nil
+        if invalidateGenerationState {
+            currentGenerationID = nil
+        }
         isGenerating = false
         updateCurrentSession()
     }
@@ -148,98 +432,208 @@ class OllamaManager: ObservableObject {
         messages = Array(messages.prefix(index + 1))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        currentTask = Task {
-            do {
-                switch self.provider {
-                case .ollama:
-                    try await self.generateWithOllama(prompt: trimmedPrompt, model: model)
-                case .deepseek:
-                    try await self.generateWithDeepSeek(model: model, webEnabled: webEnabled, query: trimmedPrompt)
-                }
-            } catch {
-                if let lastIndex = self.messages.indices.last {
-                    if Task.isCancelled {
-                        self.messages[lastIndex].content += "\n[Stopped]"
-                    } else {
-                        print("Error: \(error)")
-                        self.messages[lastIndex].content = "Error: \(error.localizedDescription)"
-                    }
-                }
-                self.isGenerating = false
-                self.updateCurrentSession()
-            }
-        }
-        await currentTask?.value
+        let request = LLMGenerateRequest(prompt: trimmedPrompt, model: model, webEnabled: webEnabled)
+        let history = Array(messages.dropLast())
+        await performGeneration(request: request, history: history)
     }
-    
+
     func generate(prompt: String, model: String, webEnabled: Bool = false) async {
-        self.isGenerating = true
-        self.messages.append(ChatMessage(role: .user, content: prompt))
-        self.messages.append(ChatMessage(role: .model, content: ""))
-        
+        guard !isGenerating else { return }
+
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return }
+
+        isGenerating = true
+        messages.append(ChatMessage(role: .user, content: trimmedPrompt))
+        messages.append(ChatMessage(role: .model, content: ""))
+
+        let request = LLMGenerateRequest(prompt: trimmedPrompt, model: model, webEnabled: webEnabled)
+        let history = Array(messages.dropLast())
+        await performGeneration(request: request, history: history)
+    }
+
+    private func performGeneration(request: LLMGenerateRequest, history: [ChatMessage]) async {
+        let startDate = Date()
+        let generationID = UUID()
+        currentGenerationID = generationID
+        telemetry.record(.generationStarted(
+            provider: provider,
+            model: request.model,
+            webEnabled: request.webEnabled,
+            historyCount: history.count
+        ))
+        currentTask?.cancel()
         currentTask = Task {
             do {
-                switch self.provider {
-                case .ollama:
-                    try await self.generateWithOllama(prompt: prompt, model: model)
-                case .deepseek:
-                    try await self.generateWithDeepSeek(model: model, webEnabled: webEnabled, query: prompt)
+                let stream = try await providerClient.responseStream(for: request, history: history)
+                for try await event in stream {
+                    if Task.isCancelled { break }
+                    apply(event)
                 }
+                finishGeneration(
+                    request: request,
+                    startDate: startDate,
+                    error: nil,
+                    cancelled: Task.isCancelled,
+                    generationID: generationID
+                )
             } catch {
-                if let lastIndex = self.messages.indices.last {
-                    if Task.isCancelled {
-                        self.messages[lastIndex].content += "\n[Stopped]"
-                    } else {
-                        print("Error: \(error)")
-                        self.messages[lastIndex].content = "Error: \(error.localizedDescription)"
-                    }
-                }
-                self.isGenerating = false
-                self.updateCurrentSession()
+                finishGeneration(
+                    request: request,
+                    startDate: startDate,
+                    error: error,
+                    cancelled: Task.isCancelled,
+                    generationID: generationID
+                )
             }
         }
+
         await currentTask?.value
     }
 
-    private func generateWithOllama(prompt: String, model: String) async throws {
-        guard let url = URL(string: baseURL) else { return }
+    private func apply(_ event: LLMResponseEvent) {
+        guard let lastIndex = messages.indices.last else { return }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let ollamaRequest = OllamaRequest(model: model, prompt: prompt, stream: true)
-        request.httpBody = try JSONEncoder().encode(ollamaRequest)
-
-        let (result, response) = try await URLSession.shared.bytes(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            var errorBody = ""
-            for try await line in result.lines {
-                errorBody += line + "\n"
+        switch event {
+        case .preview(let preview):
+            let existing = messages[lastIndex].content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if existing.isEmpty {
+                messages[lastIndex].content = preview
+            } else {
+                messages[lastIndex].content = preview + "\n\n" + existing
             }
+        case .delta(let text):
+            messages[lastIndex].content += text
+        }
+    }
 
-            if let lastIndex = self.messages.indices.last {
-                self.messages[lastIndex].content = "Server error: \(statusCode)\nDetails: \(errorBody)"
+    private func finishGeneration(request: LLMGenerateRequest, startDate: Date, error: Error?, cancelled: Bool, generationID: UUID) {
+        let isActiveGeneration = currentGenerationID == generationID
+        defer {
+            if isActiveGeneration {
+                isGenerating = false
+                currentTask = nil
+                currentGenerationID = nil
+                updateCurrentSession()
             }
-            self.isGenerating = false
+        }
+
+        guard let lastIndex = messages.indices.last else { return }
+        let durationMs = max(Int(Date().timeIntervalSince(startDate) * 1000), 0)
+        let outputLength = messages[lastIndex].content.count
+        if cancelled {
+            telemetry.record(.generationCancelled(
+                provider: provider,
+                model: request.model,
+                durationMs: durationMs,
+                outputLength: outputLength
+            ))
+            guard isActiveGeneration else { return }
+            messages[lastIndex].content += messages[lastIndex].content.isEmpty ? "[Stopped]" : "\n[Stopped]"
             return
         }
 
-        for try await line in result.lines {
-            if Task.isCancelled { break }
-            if let data = line.data(using: .utf8),
-               let ollamaResponse = try? JSONDecoder().decode(OllamaResponse.self, from: data) {
-                if let lastIndex = self.messages.indices.last {
-                    self.messages[lastIndex].content += ollamaResponse.response
-                }
-            }
+        guard let error else {
+            telemetry.record(.generationCompleted(
+                provider: provider,
+                model: request.model,
+                durationMs: durationMs,
+                outputLength: outputLength
+            ))
+            return
+        }
+        print("Error: \(error)")
+        telemetry.record(.generationFailed(
+            provider: provider,
+            model: request.model,
+            durationMs: durationMs,
+            message: error.localizedDescription
+        ))
+        guard isActiveGeneration else { return }
+        messages[lastIndex].content = error.localizedDescription
+    }
+
+    private func makeSessionSummary(from session: ChatSession) -> ChatSession {
+        ChatSession(id: session.id, messages: [], title: session.title, date: session.date)
+    }
+}
+
+private struct OllamaProviderClient: LLMGeneratingProvider {
+    let provider: LLMProvider = .ollama
+
+    private let baseURL = "http://127.0.0.1:11434/api/generate"
+
+    private struct OllamaRequest: Codable {
+        let model: String
+        let prompt: String
+        let stream: Bool
+    }
+
+    private struct OllamaResponse: Codable {
+        let model: String
+        let created_at: String
+        let response: String
+        let done: Bool
+    }
+
+    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error> {
+        guard let url = URL(string: baseURL) else {
+            throw LLMProviderError.invalidURL("Ollama URL 不合法")
         }
 
-        self.isGenerating = false
-        self.updateCurrentSession()
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try JSONEncoder().encode(
+            OllamaRequest(model: request.model, prompt: request.prompt, stream: true)
+        )
+
+        return AsyncThrowingStream { continuation in
+            let worker = Task {
+                do {
+                    let (result, response) = try await URLSession.shared.bytes(for: urlRequest)
+
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw LLMProviderError.invalidResponse("Ollama 响应异常")
+                    }
+
+                    guard httpResponse.statusCode == 200 else {
+                        var errorBody = ""
+                        for try await line in result.lines {
+                            errorBody += line + "\n"
+                        }
+                        throw LLMProviderError.server(statusCode: httpResponse.statusCode, details: errorBody.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+
+                    for try await line in result.lines {
+                        if Task.isCancelled { break }
+                        guard let data = line.data(using: .utf8),
+                              let decoded = try? JSONDecoder().decode(OllamaResponse.self, from: data) else {
+                            continue
+                        }
+                        if !decoded.response.isEmpty {
+                            continuation.yield(.delta(decoded.response))
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                worker.cancel()
+            }
+        }
     }
+}
+
+private struct DeepSeekProviderClient: LLMGeneratingProvider {
+    let provider: LLMProvider = .deepseek
+    let contextBuilder: any LLMContextBuilding
+
+    private let deepSeekBaseURLKey = "DeepSeekBaseURL"
 
     private struct DeepSeekChatCompletionRequest: Encodable {
         struct Message: Encodable {
@@ -258,18 +652,6 @@ class OllamaManager: ObservableObject {
         let stream: Bool
     }
 
-    private struct DeepSeekStreamResponse: Decodable {
-        struct Choice: Decodable {
-            struct Delta: Decodable {
-                let content: String?
-            }
-
-            let delta: Delta
-        }
-
-        let choices: [Choice]
-    }
-
     private struct DeepSeekChatCompletionResponse: Decodable {
         struct Choice: Decodable {
             struct Message: Decodable {
@@ -282,64 +664,26 @@ class OllamaManager: ObservableObject {
         let choices: [Choice]
     }
 
-    private func generateWithDeepSeek(model: String, webEnabled: Bool, query: String) async throws {
+    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error> {
         let apiKey = KeychainStore.shared.get(service: Bundle.main.bundleIdentifier ?? "OllamaApp", account: "deepseek_api_key")
         guard let apiKey, !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            if let lastIndex = self.messages.indices.last {
-                self.messages[lastIndex].content = "DeepSeek API Key 未配置。请在 DeepSeek 设置里填写后再试。"
-            }
-            self.isGenerating = false
-            self.updateCurrentSession()
-            return
+            throw LLMProviderError.missingAPIKey("DeepSeek API Key 未配置。请在 DeepSeek 设置里填写后再试。")
         }
 
         let base = (UserDefaults.standard.string(forKey: deepSeekBaseURLKey) ?? "https://api.deepseek.com")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
         let urls = deepSeekChatCompletionsURLs(fromBase: base)
-        guard urls.first != nil else {
-            if let lastIndex = self.messages.indices.last {
-                self.messages[lastIndex].content = "DeepSeek Base URL 不合法：\(base)"
-            }
-            self.isGenerating = false
-            self.updateCurrentSession()
-            return
+        guard !urls.isEmpty else {
+            throw LLMProviderError.invalidURL("DeepSeek Base URL 不合法：\(base)")
         }
 
-        var history: [DeepSeekChatCompletionRequest.Message] = [
+        let context = try await contextBuilder.buildContext(for: request)
+
+        var messages: [DeepSeekChatCompletionRequest.Message] = [
             .init(role: "system", content: "You are a helpful assistant.")
         ]
-
-        if webEnabled {
-            var webContext: String?
-
-            if let weatherContext = try? await fetchWeatherContext(query: query), !weatherContext.isEmpty {
-                webContext = weatherContext
-                history.append(.init(
-                    role: "system",
-                    content: "You have access to the following real-time data. Use it to answer the user. Do not say you cannot access real-time information.\n\n\(weatherContext)"
-                ))
-            } else if let context = try? await fetchDuckDuckGoContext(query: query), !context.isEmpty {
-                webContext = context
-                history.append(.init(
-                    role: "system",
-                    content: "Web search results for: \(query)\n\(context)\nUse the above information when it is relevant and cite URLs. Do not say you cannot browse."
-                ))
-            } else {
-                webContext = "联网失败：未获取到可用结果（可能被网络限制或查询源无返回）"
-            }
-
-            if let webContext, let lastIndex = self.messages.indices.last {
-                let existing = self.messages[lastIndex].content.trimmingCharacters(in: .whitespacesAndNewlines)
-                if existing.isEmpty {
-                    self.messages[lastIndex].content = "【联网结果】\n" + String(webContext.prefix(1500))
-                } else {
-                    self.messages[lastIndex].content = "【联网结果】\n" + String(webContext.prefix(1500)) + "\n\n" + existing
-                }
-            }
-        }
-
-        history += self.messages.dropLast().compactMap { message in
+        messages.append(contentsOf: context.systemMessages.map { .init(role: "system", content: $0) })
+        messages.append(contentsOf: history.compactMap { message in
             switch message.role {
             case .user:
                 return .init(role: "user", content: message.content)
@@ -347,70 +691,72 @@ class OllamaManager: ObservableObject {
                 guard !message.content.isEmpty else { return nil }
                 return .init(role: "assistant", content: message.content)
             }
-        }
+        })
 
         let body = DeepSeekChatCompletionRequest(
-            model: model,
-            messages: history,
+            model: request.model,
+            messages: messages,
             thinking: .init(type: "enabled"),
             reasoning_effort: "high",
             stream: false
         )
-
         let encodedBody = try JSONEncoder().encode(body)
 
-        var lastErrorMessage: String?
-
-        for (index, url) in urls.enumerated() {
-            if Task.isCancelled { break }
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.httpBody = encodedBody
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                lastErrorMessage = "DeepSeek 响应异常"
-                continue
-            }
-
-            if httpResponse.statusCode == 200 {
-                if let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionResponse.self, from: data),
-                   let content = decoded.choices.first?.message.content,
-                   let lastIndex = self.messages.indices.last {
-                    let existingPrefix = self.messages[lastIndex].content.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if existingPrefix.hasPrefix("【联网结果】") {
-                        self.messages[lastIndex].content = existingPrefix + "\n\n【回答】\n" + content
-                    } else {
-                        self.messages[lastIndex].content = content
+        return AsyncThrowingStream { continuation in
+            let worker = Task {
+                do {
+                    if let previewText = context.previewText, !previewText.isEmpty {
+                        continuation.yield(.preview(previewText))
                     }
-                } else if let lastIndex = self.messages.indices.last {
-                    self.messages[lastIndex].content = "DeepSeek 响应解析失败"
+
+                    var lastError: String?
+                    for (index, url) in urls.enumerated() {
+                        if Task.isCancelled { break }
+
+                        var urlRequest = URLRequest(url: url)
+                        urlRequest.httpMethod = "POST"
+                        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                        urlRequest.httpBody = encodedBody
+
+                        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            lastError = "DeepSeek 响应异常"
+                            continue
+                        }
+
+                        if httpResponse.statusCode == 200 {
+                            guard let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionResponse.self, from: data),
+                                  let content = decoded.choices.first?.message.content else {
+                                throw LLMProviderError.decodingFailed("DeepSeek 响应解析失败")
+                            }
+
+                            let prefix = context.previewText == nil ? "" : "\n\n【回答】\n"
+                            continuation.yield(.delta(prefix + content))
+                            continuation.finish()
+                            return
+                        }
+
+                        let errorBody = String(data: data, encoding: .utf8) ?? ""
+                        lastError = "DeepSeek 请求失败：\(httpResponse.statusCode)\n\(errorBody)"
+
+                        if httpResponse.statusCode == 404, index < urls.count - 1 {
+                            continue
+                        }
+
+                        break
+                    }
+
+                    throw LLMProviderError.invalidResponse(lastError ?? "DeepSeek 请求失败")
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-
-                self.isGenerating = false
-                self.updateCurrentSession()
-                return
             }
 
-            let errorBody = String(data: data, encoding: .utf8) ?? ""
-            lastErrorMessage = "DeepSeek 请求失败：\(httpResponse.statusCode)\n\(errorBody)"
-
-            if httpResponse.statusCode == 404, index < urls.count - 1 {
-                continue
+            continuation.onTermination = { _ in
+                worker.cancel()
             }
-
-            break
         }
-
-        if let lastIndex = self.messages.indices.last {
-            self.messages[lastIndex].content = lastErrorMessage ?? "DeepSeek 请求失败"
-        }
-        self.isGenerating = false
-        self.updateCurrentSession()
     }
 
     private func deepSeekChatCompletionsURLs(fromBase base: String) -> [URL] {
@@ -444,6 +790,46 @@ class OllamaManager: ObservableObject {
             return true
         }
     }
+}
+
+private struct LLMContextEnvelope {
+    let systemMessages: [String]
+    let previewText: String?
+
+    static let empty = LLMContextEnvelope(systemMessages: [], previewText: nil)
+}
+
+private protocol LLMContextBuilding {
+    func buildContext(for request: LLMGenerateRequest) async throws -> LLMContextEnvelope
+}
+
+private struct WebSearchContextBuilder: LLMContextBuilding {
+    func buildContext(for request: LLMGenerateRequest) async throws -> LLMContextEnvelope {
+        guard request.webEnabled else { return .empty }
+
+        if let weatherContext = try await fetchWeatherContext(query: request.prompt), !weatherContext.isEmpty {
+            return LLMContextEnvelope(
+                systemMessages: [
+                    "You have access to the following real-time data. Use it to answer the user. Do not say you cannot access real-time information.\n\n\(weatherContext)"
+                ],
+                previewText: "【联网结果】\n" + String(weatherContext.prefix(1500))
+            )
+        }
+
+        if let searchContext = try await fetchDuckDuckGoContext(query: request.prompt), !searchContext.isEmpty {
+            return LLMContextEnvelope(
+                systemMessages: [
+                    "Web search results for: \(request.prompt)\n\(searchContext)\nUse the above information when it is relevant and cite URLs. Do not say you cannot browse."
+                ],
+                previewText: "【联网结果】\n" + String(searchContext.prefix(1500))
+            )
+        }
+
+        return LLMContextEnvelope(
+            systemMessages: [],
+            previewText: "【联网结果】\n联网失败：未获取到可用结果（可能被网络限制或查询源无返回）"
+        )
+    }
 
     private struct DuckDuckGoInstantAnswer: Decodable {
         struct RelatedTopic: Decodable {
@@ -455,6 +841,31 @@ class OllamaManager: ObservableObject {
         let AbstractText: String?
         let AbstractURL: String?
         let RelatedTopics: [RelatedTopic]?
+    }
+
+    private struct OpenMeteoGeocodingResponse: Decodable {
+        struct Result: Decodable {
+            let name: String
+            let latitude: Double
+            let longitude: Double
+            let country: String?
+            let admin1: String?
+        }
+
+        let results: [Result]?
+    }
+
+    private struct OpenMeteoForecastResponse: Decodable {
+        struct Current: Decodable {
+            let time: String
+            let temperature_2m: Double?
+            let apparent_temperature: Double?
+            let relative_humidity_2m: Double?
+            let wind_speed_10m: Double?
+            let weather_code: Int?
+        }
+
+        let current: Current?
     }
 
     private func fetchDuckDuckGoContext(query: String) async throws -> String? {
@@ -505,38 +916,13 @@ class OllamaManager: ObservableObject {
             return text
         }
 
-        for (i, item) in topics.prefix(5).enumerated() {
-            lines.append("\(i + 1). \(item)")
+        for (index, item) in topics.prefix(5).enumerated() {
+            lines.append("\(index + 1). \(item)")
         }
 
         let joined = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !joined.isEmpty else { return nil }
         return String(joined.prefix(1500))
-    }
-
-    private struct OpenMeteoGeocodingResponse: Decodable {
-        struct Result: Decodable {
-            let name: String
-            let latitude: Double
-            let longitude: Double
-            let country: String?
-            let admin1: String?
-        }
-
-        let results: [Result]?
-    }
-
-    private struct OpenMeteoForecastResponse: Decodable {
-        struct Current: Decodable {
-            let time: String
-            let temperature_2m: Double?
-            let apparent_temperature: Double?
-            let relative_humidity_2m: Double?
-            let wind_speed_10m: Double?
-            let weather_code: Int?
-        }
-
-        let current: Current?
     }
 
     private func fetchWeatherContext(query: String) async throws -> String? {
@@ -583,10 +969,10 @@ class OllamaManager: ObservableObject {
         lines.append("Realtime weather (联网模式) for: \(displayPlace)")
         lines.append("Time: \(current.time)")
 
-        if let t = current.temperature_2m { lines.append("Temperature: \(String(format: "%.1f", t))°C") }
-        if let at = current.apparent_temperature { lines.append("Feels like: \(String(format: "%.1f", at))°C") }
-        if let h = current.relative_humidity_2m { lines.append("Humidity: \(Int(h))%") }
-        if let w = current.wind_speed_10m { lines.append("Wind: \(String(format: "%.1f", w)) km/h") }
+        if let temperature = current.temperature_2m { lines.append("Temperature: \(String(format: "%.1f", temperature))°C") }
+        if let apparentTemperature = current.apparent_temperature { lines.append("Feels like: \(String(format: "%.1f", apparentTemperature))°C") }
+        if let humidity = current.relative_humidity_2m { lines.append("Humidity: \(Int(humidity))%") }
+        if let wind = current.wind_speed_10m { lines.append("Wind: \(String(format: "%.1f", wind)) km/h") }
         if let code = current.weather_code { lines.append("Condition: \(openMeteoWeatherDescription(code: code)) (code \(code))") }
 
         lines.append("Source: https://open-meteo.com/ (geocoding-api.open-meteo.com, api.open-meteo.com)")

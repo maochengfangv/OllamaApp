@@ -8,138 +8,54 @@
 import SwiftUI
 import UIKit
 
-struct OllamaChatView: View {
+struct ChatView: View {
+    let provider: LLMProvider
     @ObservedObject var manager: OllamaManager
     @State private var prompt: String = ""
-    @AppStorage("SelectedOllamaModel") private var selectedModel: String = "phi3"
-    @FocusState private var isPromptFocused: Bool
-    @FocusState private var isModelFocused: Bool
-
-    var body: some View {
-        VStack {
-            TextField("Model (e.g. llama3)", text: $selectedModel)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .focused($isModelFocused)
-                .disabled(manager.isGenerating)
-                .allowsHitTesting(!manager.isGenerating)
-                .padding(.horizontal)
-
-            ScrollViewReader { proxy in
-                List {
-                    ForEach(manager.messages) { message in
-                        ChatMessageRow(
-                            message: message,
-                            isGenerating: manager.isGenerating,
-                            onResend: message.role == .user ? {
-                                Task {
-                                    await manager.resend(messageId: message.id, model: selectedModel)
-                                }
-                            } : nil
-                        )
-                        .id(message.id)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                        .listRowBackground(Color.clear)
-                    }
-                }
-                .listStyle(PlainListStyle())
-                .onChange(of: manager.messages) { _, _ in
-                    if let lastId = manager.messages.last?.id {
-                        withAnimation {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
-                    }
-                }
-                .onChange(of: manager.messages.last?.content) { _, _ in
-                    if let lastId = manager.messages.last?.id {
-                        withAnimation {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(10)
-            .padding(.horizontal)
-
-            HStack {
-                TextField("Enter prompt...", text: $prompt)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .disabled(manager.isGenerating)
-                    .focused($isPromptFocused)
-                    .allowsHitTesting(!manager.isGenerating)
-
-                if manager.isGenerating {
-                    Button(action: {
-                        manager.stopGenerating()
-                    }) {
-                        Image(systemName: "stop.circle.fill")
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.red)
-                            .clipShape(Circle())
-                    }
-                } else {
-                    Button(action: {
-                        Task {
-                            await manager.generate(prompt: prompt, model: selectedModel)
-                            prompt = ""
-                        }
-                    }) {
-                        Image(systemName: "paperplane.fill")
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.blue)
-                            .clipShape(Circle())
-                    }
-                    .disabled(prompt.isEmpty)
-                }
-            }
-            .padding()
-        }
-        .navigationTitle(manager.currentSessionId == nil ? "New Ollama Chat" : "Ollama Chat")
-        .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: manager.isGenerating) { _, isGenerating in
-            if isGenerating {
-                isPromptFocused = false
-                isModelFocused = false
-            }
-        }
-    }
-}
-
-struct DeepSeekChatView: View {
-    @ObservedObject var manager: OllamaManager
-    @State private var prompt: String = ""
-    @AppStorage("SelectedDeepSeekModel") private var selectedModel: String = "deepseek-v4-flash"
     @AppStorage("DeepSeekWebEnabled") private var isWebEnabled: Bool = false
+    @AppStorage private var selectedModel: String
     @State private var showDeepSeekSettings: Bool = false
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isModelFocused: Bool
 
+    init(provider: LLMProvider, manager: OllamaManager) {
+        self.provider = provider
+        self.manager = manager
+        _selectedModel = AppStorage(wrappedValue: provider.defaultModel, provider.selectedModelKey)
+    }
+
+    private var accentColor: Color {
+        provider == .ollama ? .blue : .green
+    }
+
+    private var effectiveWebEnabled: Bool {
+        provider.supportsWebEnhancement ? isWebEnabled : false
+    }
+
     var body: some View {
         VStack {
             HStack {
-                TextField("Model (e.g. deepseek-v4-flash)", text: $selectedModel)
+                TextField(provider.modelPlaceholder, text: $selectedModel)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .focused($isModelFocused)
                     .disabled(manager.isGenerating)
                     .allowsHitTesting(!manager.isGenerating)
 
-                Toggle(isOn: $isWebEnabled) {
-                    Text("联网")
-                }
-                .toggleStyle(.switch)
-                .labelStyle(.titleOnly)
-                .fixedSize()
-                .disabled(manager.isGenerating)
+                if provider.supportsWebEnhancement {
+                    Toggle(isOn: $isWebEnabled) {
+                        Text("联网")
+                    }
+                    .toggleStyle(.switch)
+                    .labelStyle(.titleOnly)
+                    .fixedSize()
+                    .disabled(manager.isGenerating)
 
-                Button(action: {
-                    showDeepSeekSettings = true
-                }) {
-                    Image(systemName: "gearshape")
-                        .foregroundColor(.primary)
+                    Button(action: {
+                        showDeepSeekSettings = true
+                    }) {
+                        Image(systemName: "gearshape")
+                            .foregroundColor(.primary)
+                    }
                 }
             }
             .padding(.horizontal)
@@ -152,7 +68,11 @@ struct DeepSeekChatView: View {
                             isGenerating: manager.isGenerating,
                             onResend: message.role == .user ? {
                                 Task {
-                                    await manager.resend(messageId: message.id, model: selectedModel, webEnabled: isWebEnabled)
+                                    await manager.resend(
+                                        messageId: message.id,
+                                        model: selectedModel,
+                                        webEnabled: effectiveWebEnabled
+                                    )
                                 }
                             } : nil
                         )
@@ -164,18 +84,10 @@ struct DeepSeekChatView: View {
                 }
                 .listStyle(PlainListStyle())
                 .onChange(of: manager.messages) { _, _ in
-                    if let lastId = manager.messages.last?.id {
-                        withAnimation {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
-                    }
+                    scrollToBottom(using: proxy)
                 }
                 .onChange(of: manager.messages.last?.content) { _, _ in
-                    if let lastId = manager.messages.last?.id {
-                        withAnimation {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
-                    }
+                    scrollToBottom(using: proxy)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -201,24 +113,19 @@ struct DeepSeekChatView: View {
                             .clipShape(Circle())
                     }
                 } else {
-                    Button(action: {
-                        Task {
-                            await manager.generate(prompt: prompt, model: selectedModel, webEnabled: isWebEnabled)
-                            prompt = ""
-                        }
-                    }) {
+                    Button(action: sendPrompt) {
                         Image(systemName: "paperplane.fill")
                             .foregroundColor(.white)
                             .padding(8)
-                            .background(Color.blue)
+                            .background(accentColor)
                             .clipShape(Circle())
                     }
-                    .disabled(prompt.isEmpty)
+                    .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .padding()
         }
-        .navigationTitle(manager.currentSessionId == nil ? "New DeepSeek Chat" : "DeepSeek Chat")
+        .navigationTitle(manager.currentSessionId == nil ? provider.newChatTitle : "\(provider.displayName) Chat")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showDeepSeekSettings) {
             DeepSeekSettingsView()
@@ -227,6 +134,22 @@ struct DeepSeekChatView: View {
             if isGenerating {
                 isPromptFocused = false
                 isModelFocused = false
+            }
+        }
+    }
+
+    private func sendPrompt() {
+        let currentPrompt = prompt
+        Task {
+            await manager.generate(prompt: currentPrompt, model: selectedModel, webEnabled: effectiveWebEnabled)
+            prompt = ""
+        }
+    }
+
+    private func scrollToBottom(using proxy: ScrollViewProxy) {
+        if let lastId = manager.messages.last?.id {
+            withAnimation {
+                proxy.scrollTo(lastId, anchor: .bottom)
             }
         }
     }
@@ -240,14 +163,14 @@ struct ContentView: View {
         NavigationStack {
             // Sidebar for Chat History
             VStack(spacing: 3) {
-                NavigationLink(destination: OllamaChatView(manager: ollamaManager)
+                NavigationLink(destination: ChatView(provider: .ollama, manager: ollamaManager)
                     .onAppear {
                         ollamaManager.startNewChat()
                     }
                 ) {
                     HStack {
                         Image(systemName: "square.and.pencil")
-                        Text("New Ollama Chat")
+                        Text(LLMProvider.ollama.newChatTitle)
                         Spacer()
                     }
                     .font(.headline)
@@ -260,14 +183,14 @@ struct ContentView: View {
                 .padding(.top, 8)
                 .buttonStyle(PlainButtonStyle())
 
-                NavigationLink(destination: DeepSeekChatView(manager: deepSeekManager)
+                NavigationLink(destination: ChatView(provider: .deepseek, manager: deepSeekManager)
                     .onAppear {
                         deepSeekManager.startNewChat()
                     }
                 ) {
                     HStack {
                         Image(systemName: "square.and.pencil")
-                        Text("New DeepSeek Chat")
+                        Text(LLMProvider.deepseek.newChatTitle)
                         Spacer()
                     }
                     .font(.headline)
@@ -280,9 +203,9 @@ struct ContentView: View {
                 .buttonStyle(PlainButtonStyle())
                 
                 List {
-                    Section(header: Text("Ollama History")) {
+                    Section(header: Text(LLMProvider.ollama.historyTitle)) {
                         ForEach(ollamaManager.chatHistory) { session in
-                            NavigationLink(destination: OllamaChatView(manager: ollamaManager)
+                            NavigationLink(destination: ChatView(provider: .ollama, manager: ollamaManager)
                                 .onAppear {
                                     ollamaManager.loadChat(session: session)
                                 }
@@ -302,9 +225,9 @@ struct ContentView: View {
                         }
                     }
 
-                    Section(header: Text("DeepSeek History")) {
+                    Section(header: Text(LLMProvider.deepseek.historyTitle)) {
                         ForEach(deepSeekManager.chatHistory) { session in
-                            NavigationLink(destination: DeepSeekChatView(manager: deepSeekManager)
+                            NavigationLink(destination: ChatView(provider: .deepseek, manager: deepSeekManager)
                                 .onAppear {
                                     deepSeekManager.loadChat(session: session)
                                 }
@@ -331,8 +254,10 @@ struct ContentView: View {
 }
     
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
 }
 
 struct DeepSeekSettingsView: View {

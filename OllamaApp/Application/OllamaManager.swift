@@ -6,6 +6,7 @@ class OllamaManager: ObservableObject {
     @Published var isGenerating: Bool = false
     @Published var chatHistory: [ChatSession] = []
     @Published var latestUsage: AIUsage?
+    @Published var latestDebugSnapshot: AIDebugSnapshot?
 
     let provider: LLMProvider
 
@@ -39,6 +40,7 @@ class OllamaManager: ObservableObject {
         messages = []
         currentSessionId = nil
         latestUsage = nil
+        latestDebugSnapshot = nil
     }
 
     func loadChat(session: ChatSession) {
@@ -47,6 +49,7 @@ class OllamaManager: ObservableObject {
         messages = storedSession.messages
         currentSessionId = storedSession.id
         latestUsage = nil
+        latestDebugSnapshot = nil
         telemetry.record(.sessionLoaded(provider: provider, sessionId: storedSession.id, messageCount: storedSession.messages.count))
     }
 
@@ -138,6 +141,7 @@ class OllamaManager: ObservableObject {
         let startDate = Date()
         let generationID = request.requestID
         currentGenerationID = generationID
+        latestDebugSnapshot = makeDebugSnapshot(for: request)
         currentTask?.cancel()
         currentTask = Task {
             var outcome: GenerationOutcome = .completed(nil)
@@ -150,12 +154,17 @@ class OllamaManager: ObservableObject {
                     apply(event)
                 case .usage(let usage):
                     latestUsage = usage
+                    latestDebugSnapshot?.usage = usage
+                    latestDebugSnapshot?.updatedAt = Date()
                 case .completed(let completion):
                     latestUsage = completion.usage
+                    apply(completion: completion)
                     outcome = .completed(completion)
                 case .failed(let error):
+                    apply(error: error)
                     outcome = .failed(error)
                 case .cancelled(let cancellation):
+                    apply(cancellation: cancellation)
                     outcome = .cancelled(cancellation)
                 }
             }
@@ -205,6 +214,10 @@ class OllamaManager: ObservableObject {
             return
         case .cancelled(let cancellation):
             if cancellation == nil {
+                latestDebugSnapshot?.status = .cancelled
+                latestDebugSnapshot?.resolvedProvider = request.preferredProvider
+                latestDebugSnapshot?.durationMs = max(Int(Date().timeIntervalSince(startDate) * 1000), 0)
+                latestDebugSnapshot?.updatedAt = Date()
                 telemetry.record(.generationCancelled(
                     requestID: request.requestID,
                     provider: request.preferredProvider,
@@ -249,6 +262,71 @@ class OllamaManager: ObservableObject {
                 "promptTemplateID": promptTemplateID.rawValue
             ]
         )
+    }
+
+    private func makeDebugSnapshot(for request: AIRequest) -> AIDebugSnapshot {
+        AIDebugSnapshot(
+            requestID: request.requestID,
+            sessionID: request.sessionID,
+            status: .generating,
+            promptPreview: String((request.latestUserMessage ?? "").prefix(120)),
+            entryProvider: provider,
+            resolvedProvider: nil,
+            fallbackProvider: request.fallbackProvider,
+            routePolicySummary: routePolicySummary(for: request.routePolicy),
+            model: request.model,
+            promptTemplateID: request.promptTemplateID,
+            webEnabled: request.contextOptions.webEnabled,
+            retryLimit: request.retryPolicy.maxRetries,
+            retryCount: 0,
+            fallbackUsed: false,
+            durationMs: nil,
+            firstTokenLatencyMs: nil,
+            usage: nil,
+            errorCode: nil,
+            errorMessage: nil,
+            updatedAt: Date()
+        )
+    }
+
+    private func apply(completion: AIResponseCompletion) {
+        latestDebugSnapshot?.status = .completed
+        latestDebugSnapshot?.resolvedProvider = completion.provider
+        latestDebugSnapshot?.retryCount = completion.retryCount
+        latestDebugSnapshot?.fallbackUsed = completion.fallbackUsed
+        latestDebugSnapshot?.durationMs = completion.durationMs
+        latestDebugSnapshot?.firstTokenLatencyMs = completion.firstTokenLatencyMs
+        latestDebugSnapshot?.usage = completion.usage
+        latestDebugSnapshot?.errorCode = nil
+        latestDebugSnapshot?.errorMessage = nil
+        latestDebugSnapshot?.updatedAt = Date()
+    }
+
+    private func apply(error: AIClientError) {
+        latestDebugSnapshot?.status = .failed
+        latestDebugSnapshot?.resolvedProvider = error.provider ?? latestDebugSnapshot?.resolvedProvider ?? provider
+        latestDebugSnapshot?.errorCode = error.code
+        latestDebugSnapshot?.errorMessage = error.message
+        latestDebugSnapshot?.updatedAt = Date()
+    }
+
+    private func apply(cancellation: AIResponseCancellation) {
+        latestDebugSnapshot?.status = .cancelled
+        latestDebugSnapshot?.resolvedProvider = cancellation.provider
+        latestDebugSnapshot?.retryCount = cancellation.retryCount
+        latestDebugSnapshot?.fallbackUsed = cancellation.fallbackUsed
+        latestDebugSnapshot?.durationMs = cancellation.durationMs
+        latestDebugSnapshot?.updatedAt = Date()
+    }
+
+    private func routePolicySummary(for policy: AIRoutePolicy) -> String {
+        switch policy {
+        case .direct(let primary, let fallback):
+            return "direct(primary: \(primary.rawValue), fallback: \(fallback?.rawValue ?? "none"))"
+        case .capabilityPreferred(let preferred, let fallback, let required):
+            let requiredText = required.map(\.rawValue).joined(separator: ", ")
+            return "capabilityPreferred(preferred: \(preferred.rawValue), fallback: \(fallback?.rawValue ?? "none"), required: [\(requiredText)])"
+        }
     }
 }
 

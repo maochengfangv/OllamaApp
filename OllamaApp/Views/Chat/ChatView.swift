@@ -7,6 +7,7 @@ struct ChatView: View {
     @AppStorage("DeepSeekWebEnabled") private var isWebEnabled: Bool = false
     @AppStorage private var selectedModel: String
     @State private var showDeepSeekSettings: Bool = false
+    @State private var showDebugPanel: Bool = false
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isModelFocused: Bool
 
@@ -48,6 +49,13 @@ struct ChatView: View {
                         Image(systemName: "gearshape")
                             .foregroundColor(.primary)
                     }
+                }
+
+                Button(action: {
+                    showDebugPanel = true
+                }) {
+                    Image(systemName: "ladybug")
+                        .foregroundColor(.primary)
                 }
             }
             .padding(.horizontal)
@@ -121,6 +129,9 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showDeepSeekSettings) {
             DeepSeekSettingsView()
+        }
+        .sheet(isPresented: $showDebugPanel) {
+            AIDebugPanelView(provider: provider, manager: manager)
         }
         .onChange(of: manager.isGenerating) { _, isGenerating in
             if isGenerating {

@@ -209,6 +209,10 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertEqual(manager.chatHistory.count, 1)
         XCTAssertEqual(manager.latestUsage?.outputCharacters, "Hello from stub".count)
         XCTAssertEqual(manager.latestUsage?.estimatedCost, 0)
+        XCTAssertEqual(manager.latestDebugSnapshot?.status, .completed)
+        XCTAssertEqual(manager.latestDebugSnapshot?.resolvedProvider, .ollama)
+        XCTAssertEqual(manager.latestDebugSnapshot?.promptTemplateID, .engineeringChat)
+        XCTAssertEqual(manager.latestDebugSnapshot?.usage?.outputCharacters, "Hello from stub".count)
 
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_started" }))
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_completed" }))

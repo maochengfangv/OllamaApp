@@ -118,7 +118,11 @@ final class OllamaAppTests: XCTestCase {
         )
         let manager = OllamaManager(
             provider: .ollama,
-            providerClient: StubProvider(provider: .ollama, events: [.delta("Hello from stub")]),
+            aiClient: AIClient(
+                providerFactory: { _ in StubProvider(provider: .ollama, events: [.delta("Hello from stub")]) },
+                contextBuilder: EmptyContextBuilder(),
+                telemetry: telemetry
+            ),
             sessionStore: store,
             telemetry: telemetry
         )
@@ -152,7 +156,11 @@ final class OllamaAppTests: XCTestCase {
         )
         let manager = OllamaManager(
             provider: .ollama,
-            providerClient: provider,
+            aiClient: AIClient(
+                providerFactory: { _ in provider },
+                contextBuilder: EmptyContextBuilder(),
+                telemetry: telemetry
+            ),
             sessionStore: store,
             telemetry: telemetry
         )
@@ -188,12 +196,17 @@ final class OllamaAppTests: XCTestCase {
             provider: .ollama,
             plans: [
                 .failure("Stub failure"),
+                .failure("Stub failure"),
                 .events([.delta("Retry succeeded")])
             ]
         )
         let manager = OllamaManager(
             provider: .ollama,
-            providerClient: provider,
+            aiClient: AIClient(
+                providerFactory: { _ in provider },
+                contextBuilder: EmptyContextBuilder(),
+                telemetry: telemetry
+            ),
             sessionStore: store,
             telemetry: telemetry
         )
@@ -263,7 +276,11 @@ final class OllamaAppTests: XCTestCase {
         )
         let manager = OllamaManager(
             provider: .ollama,
-            providerClient: provider,
+            aiClient: AIClient(
+                providerFactory: { _ in provider },
+                contextBuilder: EmptyContextBuilder(),
+                telemetry: telemetry
+            ),
             sessionStore: store,
             telemetry: telemetry
         )
@@ -301,11 +318,17 @@ private final class TelemetrySpy: ChatTelemetryRecording {
     }
 }
 
+private struct EmptyContextBuilder: LLMContextBuilding {
+    func buildContext(for request: AIRequest) async throws -> LLMContextEnvelope {
+        .empty
+    }
+}
+
 private struct StubProvider: LLMGeneratingProvider {
     let provider: LLMProvider
-    let events: [LLMResponseEvent]
+    let events: [AIProviderChunk]
 
-    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error> {
+    func responseStream(for request: AIRequest, context: LLMContextEnvelope) async throws -> AsyncThrowingStream<AIProviderChunk, Error> {
         AsyncThrowingStream { continuation in
             for event in events {
                 continuation.yield(event)
@@ -325,7 +348,7 @@ private struct TestProviderError: LocalizedError {
 }
 
 private enum ProviderPlan {
-    case events([LLMResponseEvent], stepDelayNanoseconds: UInt64 = 0)
+    case events([AIProviderChunk], stepDelayNanoseconds: UInt64 = 0)
     case failure(String, delayNanoseconds: UInt64 = 0)
 }
 
@@ -339,7 +362,7 @@ private actor PlannedProvider: LLMGeneratingProvider {
         self.plans = plans
     }
 
-    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error> {
+    func responseStream(for request: AIRequest, context: LLMContextEnvelope) async throws -> AsyncThrowingStream<AIProviderChunk, Error> {
         let plan = nextPlan()
 
         return AsyncThrowingStream { continuation in

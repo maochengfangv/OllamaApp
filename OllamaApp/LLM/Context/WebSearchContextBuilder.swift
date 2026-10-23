@@ -1,10 +1,12 @@
 import Foundation
 
 struct WebSearchContextBuilder: LLMContextBuilding {
-    func buildContext(for request: LLMGenerateRequest) async throws -> LLMContextEnvelope {
-        guard request.webEnabled else { return .empty }
+    func buildContext(for request: AIRequest) async throws -> LLMContextEnvelope {
+        guard request.contextOptions.webEnabled else { return .empty }
+        let query = request.latestUserMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !query.isEmpty else { return .empty }
 
-        if let weatherContext = try await fetchWeatherContext(query: request.prompt), !weatherContext.isEmpty {
+        if let weatherContext = try await fetchWeatherContext(query: query), !weatherContext.isEmpty {
             return LLMContextEnvelope(
                 systemMessages: [
                     "You have access to the following real-time data. Use it to answer the user. Do not say you cannot access real-time information.\n\n\(weatherContext)"
@@ -13,10 +15,10 @@ struct WebSearchContextBuilder: LLMContextBuilding {
             )
         }
 
-        if let searchContext = try await fetchDuckDuckGoContext(query: request.prompt), !searchContext.isEmpty {
+        if let searchContext = try await fetchDuckDuckGoContext(query: query), !searchContext.isEmpty {
             return LLMContextEnvelope(
                 systemMessages: [
-                    "Web search results for: \(request.prompt)\n\(searchContext)\nUse the above information when it is relevant and cite URLs. Do not say you cannot browse."
+                    "Web search results for: \(query)\n\(searchContext)\nUse the above information when it is relevant and cite URLs. Do not say you cannot browse."
                 ],
                 previewText: "【联网结果】\n" + String(searchContext.prefix(1500))
             )

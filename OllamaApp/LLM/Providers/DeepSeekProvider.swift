@@ -2,7 +2,6 @@ import Foundation
 
 struct DeepSeekProviderClient: LLMGeneratingProvider {
     let provider: LLMProvider = .deepseek
-    let contextBuilder: any LLMContextBuilding
 
     private let deepSeekBaseURLKey = "DeepSeekBaseURL"
 
@@ -35,7 +34,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         let choices: [Choice]
     }
 
-    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error> {
+    func responseStream(for request: AIRequest, context: LLMContextEnvelope) async throws -> AsyncThrowingStream<AIProviderChunk, Error> {
         let apiKey = KeychainStore.shared.get(service: Bundle.main.bundleIdentifier ?? "OllamaApp", account: "deepseek_api_key")
         guard let apiKey, !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LLMProviderError.missingAPIKey("DeepSeek API Key 未配置。请在 DeepSeek 设置里填写后再试。")
@@ -48,17 +47,17 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
             throw LLMProviderError.invalidURL("DeepSeek Base URL 不合法：\(base)")
         }
 
-        let context = try await contextBuilder.buildContext(for: request)
-
         var messages: [DeepSeekChatCompletionRequest.Message] = [
-            .init(role: "system", content: "You are a helpful assistant.")
+            .init(role: "system", content: request.systemPrompt ?? "You are a helpful assistant.")
         ]
         messages.append(contentsOf: context.systemMessages.map { .init(role: "system", content: $0) })
-        messages.append(contentsOf: history.compactMap { message in
+        messages.append(contentsOf: request.messages.compactMap { message in
             switch message.role {
+            case .system:
+                return .init(role: "system", content: message.content)
             case .user:
                 return .init(role: "user", content: message.content)
-            case .model:
+            case .assistant:
                 guard !message.content.isEmpty else { return nil }
                 return .init(role: "assistant", content: message.content)
             }
@@ -88,6 +87,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                         urlRequest.httpMethod = "POST"
                         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
                         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                        urlRequest.timeoutInterval = request.timeoutInterval
                         urlRequest.httpBody = encodedBody
 
                         let (data, response) = try await URLSession.shared.data(for: urlRequest)

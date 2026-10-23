@@ -2,10 +2,46 @@ import Foundation
 import OSLog
 
 enum ChatTelemetryEvent: Equatable {
-    case generationStarted(provider: LLMProvider, model: String, webEnabled: Bool, historyCount: Int)
-    case generationCompleted(provider: LLMProvider, model: String, durationMs: Int, outputLength: Int)
-    case generationCancelled(provider: LLMProvider, model: String, durationMs: Int, outputLength: Int)
-    case generationFailed(provider: LLMProvider, model: String, durationMs: Int, message: String)
+    case generationStarted(
+        requestID: UUID,
+        provider: LLMProvider,
+        model: String,
+        webEnabled: Bool,
+        historyCount: Int,
+        timeoutMs: Int,
+        retryLimit: Int,
+        fallbackProvider: LLMProvider?
+    )
+    case generationCompleted(
+        requestID: UUID,
+        provider: LLMProvider,
+        model: String,
+        durationMs: Int,
+        firstTokenLatencyMs: Int?,
+        retryCount: Int,
+        fallbackUsed: Bool,
+        outputLength: Int,
+        estimatedCost: Double?
+    )
+    case generationCancelled(
+        requestID: UUID,
+        provider: LLMProvider,
+        model: String,
+        durationMs: Int,
+        retryCount: Int,
+        fallbackUsed: Bool,
+        outputLength: Int
+    )
+    case generationFailed(
+        requestID: UUID,
+        provider: LLMProvider,
+        model: String,
+        durationMs: Int,
+        retryCount: Int,
+        fallbackUsed: Bool,
+        errorCode: AIClientErrorCode,
+        message: String
+    )
     case sessionLoaded(provider: LLMProvider, sessionId: String, messageCount: Int)
     case sessionDeleted(provider: LLMProvider, sessionId: String)
     case legacyHistoryMigrated(provider: LLMProvider, sessionCount: Int)
@@ -24,14 +60,14 @@ enum ChatTelemetryEvent: Equatable {
 
     var message: String {
         switch self {
-        case .generationStarted(let provider, let model, let webEnabled, let historyCount):
-            return "provider=\(provider.rawValue) model=\(model) webEnabled=\(webEnabled) historyCount=\(historyCount)"
-        case .generationCompleted(let provider, let model, let durationMs, let outputLength):
-            return "provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) outputLength=\(outputLength)"
-        case .generationCancelled(let provider, let model, let durationMs, let outputLength):
-            return "provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) outputLength=\(outputLength)"
-        case .generationFailed(let provider, let model, let durationMs, let message):
-            return "provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) error=\(message)"
+        case .generationStarted(let requestID, let provider, let model, let webEnabled, let historyCount, let timeoutMs, let retryLimit, let fallbackProvider):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) webEnabled=\(webEnabled) historyCount=\(historyCount) timeoutMs=\(timeoutMs) retryLimit=\(retryLimit) fallbackProvider=\(fallbackProvider?.rawValue ?? "none")"
+        case .generationCompleted(let requestID, let provider, let model, let durationMs, let firstTokenLatencyMs, let retryCount, let fallbackUsed, let outputLength, let estimatedCost):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) firstTokenLatencyMs=\(stringValue(firstTokenLatencyMs)) retryCount=\(retryCount) fallbackUsed=\(fallbackUsed) outputLength=\(outputLength) estimatedCost=\(stringValue(estimatedCost))"
+        case .generationCancelled(let requestID, let provider, let model, let durationMs, let retryCount, let fallbackUsed, let outputLength):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) retryCount=\(retryCount) fallbackUsed=\(fallbackUsed) outputLength=\(outputLength)"
+        case .generationFailed(let requestID, let provider, let model, let durationMs, let retryCount, let fallbackUsed, let errorCode, let message):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) retryCount=\(retryCount) fallbackUsed=\(fallbackUsed) errorCode=\(errorCode.rawValue) error=\(message)"
         case .sessionLoaded(let provider, let sessionId, let messageCount):
             return "provider=\(provider.rawValue) sessionId=\(sessionId) messageCount=\(messageCount)"
         case .sessionDeleted(let provider, let sessionId):
@@ -58,4 +94,9 @@ final class ChatTelemetryRecorder: ChatTelemetryRecording {
     func record(_ event: ChatTelemetryEvent) {
         logger.info("\(event.name, privacy: .public) \(event.message, privacy: .public)")
     }
+}
+
+private func stringValue<T>(_ value: T?) -> String {
+    guard let value else { return "nil" }
+    return String(describing: value)
 }

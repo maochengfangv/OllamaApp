@@ -8,5 +8,5 @@ struct LLMContextEnvelope {
 }
 
 protocol LLMContextBuilding {
-    func buildContext(for request: LLMGenerateRequest) async throws -> LLMContextEnvelope
+    func buildContext(for request: AIRequest) async throws -> LLMContextEnvelope
 }

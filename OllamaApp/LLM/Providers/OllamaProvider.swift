@@ -18,7 +18,7 @@ struct OllamaProviderClient: LLMGeneratingProvider {
         let done: Bool
     }
 
-    func responseStream(for request: LLMGenerateRequest, history: [ChatMessage]) async throws -> AsyncThrowingStream<LLMResponseEvent, Error> {
+    func responseStream(for request: AIRequest, context: LLMContextEnvelope) async throws -> AsyncThrowingStream<AIProviderChunk, Error> {
         guard let url = URL(string: baseURL) else {
             throw LLMProviderError.invalidURL("Ollama URL 不合法")
         }
@@ -26,8 +26,9 @@ struct OllamaProviderClient: LLMGeneratingProvider {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.timeoutInterval = request.timeoutInterval
         urlRequest.httpBody = try JSONEncoder().encode(
-            OllamaRequest(model: request.model, prompt: request.prompt, stream: true)
+            OllamaRequest(model: request.model, prompt: makePrompt(from: request, context: context), stream: true)
         )
 
         return AsyncThrowingStream { continuation in
@@ -71,5 +72,33 @@ struct OllamaProviderClient: LLMGeneratingProvider {
                 worker.cancel()
             }
         }
+    }
+
+    private func makePrompt(from request: AIRequest, context: LLMContextEnvelope) -> String {
+        var lines: [String] = []
+
+        if let systemPrompt = request.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !systemPrompt.isEmpty {
+            lines.append("System: \(systemPrompt)")
+        }
+
+        for systemMessage in context.systemMessages where !systemMessage.isEmpty {
+            lines.append("System: \(systemMessage)")
+        }
+
+        for message in request.messages {
+            let prefix: String
+            switch message.role {
+            case .system:
+                prefix = "System"
+            case .user:
+                prefix = "User"
+            case .assistant:
+                prefix = "Assistant"
+            }
+            lines.append("\(prefix): \(message.content)")
+        }
+
+        lines.append("Assistant:")
+        return lines.joined(separator: "\n\n")
     }
 }

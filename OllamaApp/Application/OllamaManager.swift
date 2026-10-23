@@ -9,7 +9,7 @@ class OllamaManager: ObservableObject {
     let provider: LLMProvider
 
     var currentSessionId: String?
-    private let providerClient: any LLMGeneratingProvider
+    private let aiClient: any AIClienting
     private let sessionStore: ChatSessionStore
     private let telemetry: any ChatTelemetryRecording
 
@@ -18,13 +18,13 @@ class OllamaManager: ObservableObject {
 
     init(
         provider: LLMProvider,
-        providerClient: (any LLMGeneratingProvider)? = nil,
+        aiClient: (any AIClienting)? = nil,
         sessionStore: ChatSessionStore? = nil,
         telemetry: any ChatTelemetryRecording = ChatTelemetryRecorder.shared
     ) {
         self.provider = provider
         self.telemetry = telemetry
-        self.providerClient = providerClient ?? LLMProviderFactory.makeProvider(for: provider)
+        self.aiClient = aiClient ?? AIClient(telemetry: telemetry)
         self.sessionStore = sessionStore ?? ChatSessionStore(
             provider: provider,
             legacyKeys: provider == .ollama ? ["ChatHistory_ollama", "OllamaChatHistory"] : ["ChatHistory_\(provider.rawValue)"],
@@ -112,9 +112,7 @@ class OllamaManager: ObservableObject {
         messages = Array(messages.prefix(index + 1))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        let request = LLMGenerateRequest(prompt: trimmedPrompt, model: model, webEnabled: webEnabled)
-        let history = Array(messages.dropLast())
-        await performGeneration(request: request, history: history)
+        await performGeneration(model: model, webEnabled: webEnabled)
     }
 
     func generate(prompt: String, model: String, webEnabled: Bool = false) async {
@@ -127,51 +125,45 @@ class OllamaManager: ObservableObject {
         messages.append(ChatMessage(role: .user, content: trimmedPrompt))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        let request = LLMGenerateRequest(prompt: trimmedPrompt, model: model, webEnabled: webEnabled)
-        let history = Array(messages.dropLast())
-        await performGeneration(request: request, history: history)
+        await performGeneration(model: model, webEnabled: webEnabled)
     }
 
-    private func performGeneration(request: LLMGenerateRequest, history: [ChatMessage]) async {
+    private func performGeneration(model: String, webEnabled: Bool) async {
+        let request = makeRequest(model: model, webEnabled: webEnabled)
         let startDate = Date()
-        let generationID = UUID()
+        let generationID = request.requestID
         currentGenerationID = generationID
-        telemetry.record(.generationStarted(
-            provider: provider,
-            model: request.model,
-            webEnabled: request.webEnabled,
-            historyCount: history.count
-        ))
         currentTask?.cancel()
         currentTask = Task {
-            do {
-                let stream = try await providerClient.responseStream(for: request, history: history)
-                for try await event in stream {
-                    if Task.isCancelled { break }
+            var outcome: GenerationOutcome = .completed(nil)
+            let stream = aiClient.responseStream(for: request)
+            for await event in stream {
+                switch event {
+                case .started:
+                    break
+                case .preview, .delta:
                     apply(event)
+                case .usage:
+                    break
+                case .completed(let completion):
+                    outcome = .completed(completion)
+                case .failed(let error):
+                    outcome = .failed(error)
+                case .cancelled(let cancellation):
+                    outcome = .cancelled(cancellation)
                 }
-                finishGeneration(
-                    request: request,
-                    startDate: startDate,
-                    error: nil,
-                    cancelled: Task.isCancelled,
-                    generationID: generationID
-                )
-            } catch {
-                finishGeneration(
-                    request: request,
-                    startDate: startDate,
-                    error: error,
-                    cancelled: Task.isCancelled,
-                    generationID: generationID
-                )
             }
+
+            if Task.isCancelled, !outcome.isTerminalCancellation {
+                outcome = .cancelled(nil)
+            }
+            finishGeneration(request: request, startDate: startDate, outcome: outcome, generationID: generationID)
         }
 
         await currentTask?.value
     }
 
-    private func apply(_ event: LLMResponseEvent) {
+    private func apply(_ event: AIResponseEvent) {
         guard let lastIndex = messages.indices.last else { return }
 
         switch event {
@@ -184,10 +176,12 @@ class OllamaManager: ObservableObject {
             }
         case .delta(let text):
             messages[lastIndex].content += text
+        case .started, .usage, .completed, .failed, .cancelled:
+            break
         }
     }
 
-    private func finishGeneration(request: LLMGenerateRequest, startDate: Date, error: Error?, cancelled: Bool, generationID: UUID) {
+    private func finishGeneration(request: AIRequest, startDate: Date, outcome: GenerationOutcome, generationID: UUID) {
         let isActiveGeneration = currentGenerationID == generationID
         defer {
             if isActiveGeneration {
@@ -199,41 +193,60 @@ class OllamaManager: ObservableObject {
         }
 
         guard let lastIndex = messages.indices.last else { return }
-        let durationMs = max(Int(Date().timeIntervalSince(startDate) * 1000), 0)
-        let outputLength = messages[lastIndex].content.count
-        if cancelled {
-            telemetry.record(.generationCancelled(
-                provider: provider,
-                model: request.model,
-                durationMs: durationMs,
-                outputLength: outputLength
-            ))
+
+        switch outcome {
+        case .completed:
+            return
+        case .cancelled(let cancellation):
+            if cancellation == nil {
+                telemetry.record(.generationCancelled(
+                    requestID: request.requestID,
+                    provider: request.preferredProvider,
+                    model: request.model,
+                    durationMs: max(Int(Date().timeIntervalSince(startDate) * 1000), 0),
+                    retryCount: 0,
+                    fallbackUsed: false,
+                    outputLength: messages[lastIndex].content.count
+                ))
+            }
             guard isActiveGeneration else { return }
             messages[lastIndex].content += messages[lastIndex].content.isEmpty ? "[Stopped]" : "\n[Stopped]"
-            return
+        case .failed(let error):
+            guard isActiveGeneration else { return }
+            messages[lastIndex].content = error.localizedDescription
         }
-
-        guard let error else {
-            telemetry.record(.generationCompleted(
-                provider: provider,
-                model: request.model,
-                durationMs: durationMs,
-                outputLength: outputLength
-            ))
-            return
-        }
-        print("Error: \(error)")
-        telemetry.record(.generationFailed(
-            provider: provider,
-            model: request.model,
-            durationMs: durationMs,
-            message: error.localizedDescription
-        ))
-        guard isActiveGeneration else { return }
-        messages[lastIndex].content = error.localizedDescription
     }
 
     private func makeSessionSummary(from session: ChatSession) -> ChatSession {
         ChatSession(id: session.id, messages: [], title: session.title, date: session.date)
+    }
+
+    private func makeRequest(model: String, webEnabled: Bool) -> AIRequest {
+        AIRequest(
+            sessionID: currentSessionId,
+            preferredProvider: provider,
+            fallbackProvider: nil,
+            model: model,
+            messages: Array(messages.dropLast()).map(\.aiMessage),
+            timeoutInterval: 60,
+            contextOptions: AIContextOptions(webEnabled: webEnabled),
+            retryPolicy: .default,
+            metadata: [
+                "entryProvider": provider.rawValue
+            ]
+        )
+    }
+}
+
+private enum GenerationOutcome {
+    case completed(AIResponseCompletion?)
+    case failed(AIClientError)
+    case cancelled(AIResponseCancellation?)
+
+    var isTerminalCancellation: Bool {
+        if case .cancelled = self {
+            return true
+        }
+        return false
     }
 }

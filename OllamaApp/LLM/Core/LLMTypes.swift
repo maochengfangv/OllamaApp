@@ -201,6 +201,9 @@ struct AIRequest: Equatable {
     let messages: [AIMessage]
     let systemPrompt: String?
     let promptTemplateID: AIPromptTemplateID
+    let promptScene: AIPromptScene
+    let promptModule: String
+    let outputFormat: AIPromptOutputFormat
     let promptVariables: [String: String]
     let temperature: Double?
     let maxTokens: Int?
@@ -217,6 +220,9 @@ struct AIRequest: Equatable {
         messages: [AIMessage],
         systemPrompt: String? = nil,
         promptTemplateID: AIPromptTemplateID = .generalChat,
+        promptScene: AIPromptScene = .chat,
+        promptModule: String = "general",
+        outputFormat: AIPromptOutputFormat = .paragraph,
         promptVariables: [String: String] = [:],
         temperature: Double? = nil,
         maxTokens: Int? = nil,
@@ -232,6 +238,9 @@ struct AIRequest: Equatable {
         self.messages = messages
         self.systemPrompt = systemPrompt
         self.promptTemplateID = promptTemplateID
+        self.promptScene = promptScene
+        self.promptModule = promptModule
+        self.outputFormat = outputFormat
         self.promptVariables = promptVariables
         self.temperature = temperature
         self.maxTokens = maxTokens
@@ -257,7 +266,12 @@ struct AIRequest: Equatable {
         if let systemPrompt, !systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return systemPrompt
         }
-        return AIPromptTemplateLibrary.render(id: promptTemplateID, variables: promptVariables)
+        let mergedVariables = [
+            "scene": promptScene.displayName,
+            "module": promptModule,
+            "output_format": outputFormat.displayName
+        ].merging(promptVariables) { _, new in new }
+        return AIPromptTemplateLibrary.render(id: promptTemplateID, variables: mergedVariables)
     }
 }
 

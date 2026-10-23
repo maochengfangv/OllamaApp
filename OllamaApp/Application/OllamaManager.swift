@@ -106,7 +106,12 @@ class OllamaManager: ObservableObject {
         updateCurrentSession()
     }
 
-    func resend(messageId: UUID, model: String, webEnabled: Bool = false) async {
+    func resend(
+        messageId: UUID,
+        model: String,
+        webEnabled: Bool = false,
+        promptOverrides: AIPromptOverrides = .none
+    ) async {
         guard !isGenerating else { return }
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
         guard messages[index].role == .user else { return }
@@ -119,10 +124,20 @@ class OllamaManager: ObservableObject {
         messages = Array(messages.prefix(index + 1))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        await performGeneration(model: model, prompt: trimmedPrompt, webEnabled: webEnabled)
+        await performGeneration(
+            model: model,
+            prompt: trimmedPrompt,
+            webEnabled: webEnabled,
+            promptOverrides: promptOverrides
+        )
     }
 
-    func generate(prompt: String, model: String, webEnabled: Bool = false) async {
+    func generate(
+        prompt: String,
+        model: String,
+        webEnabled: Bool = false,
+        promptOverrides: AIPromptOverrides = .none
+    ) async {
         guard !isGenerating else { return }
 
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -133,11 +148,26 @@ class OllamaManager: ObservableObject {
         messages.append(ChatMessage(role: .user, content: trimmedPrompt))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        await performGeneration(model: model, prompt: trimmedPrompt, webEnabled: webEnabled)
+        await performGeneration(
+            model: model,
+            prompt: trimmedPrompt,
+            webEnabled: webEnabled,
+            promptOverrides: promptOverrides
+        )
     }
 
-    private func performGeneration(model: String, prompt: String, webEnabled: Bool) async {
-        let request = makeRequest(model: model, prompt: prompt, webEnabled: webEnabled)
+    private func performGeneration(
+        model: String,
+        prompt: String,
+        webEnabled: Bool,
+        promptOverrides: AIPromptOverrides
+    ) async {
+        let request = makeRequest(
+            model: model,
+            prompt: prompt,
+            webEnabled: webEnabled,
+            promptOverrides: promptOverrides
+        )
         let startDate = Date()
         let generationID = request.requestID
         currentGenerationID = generationID
@@ -240,9 +270,18 @@ class OllamaManager: ObservableObject {
         ChatSession(id: session.id, messages: [], title: session.title, date: session.date)
     }
 
-    private func makeRequest(model: String, prompt: String, webEnabled: Bool) -> AIRequest {
+    private func makeRequest(
+        model: String,
+        prompt: String,
+        webEnabled: Bool,
+        promptOverrides: AIPromptOverrides
+    ) -> AIRequest {
         let requiredCapabilities: [AICapability] = webEnabled ? [.webSearch] : []
-        let promptTemplateID = AIPromptTemplateSelector.select(for: prompt, webEnabled: webEnabled)
+        let promptConfiguration = AIPromptTemplateSelector.resolveConfiguration(
+            for: prompt,
+            webEnabled: webEnabled,
+            overrides: promptOverrides
+        )
 
         return AIRequest(
             sessionID: currentSessionId,
@@ -253,13 +292,21 @@ class OllamaManager: ObservableObject {
             ),
             model: model,
             messages: Array(messages.dropLast()).map(\.aiMessage),
-            promptTemplateID: promptTemplateID,
+            promptTemplateID: promptConfiguration.templateID,
+            promptScene: promptConfiguration.scene,
+            promptModule: promptConfiguration.module,
+            outputFormat: promptConfiguration.outputFormat,
+            promptVariables: promptConfiguration.variables,
             timeoutInterval: 60,
             contextOptions: AIContextOptions(webEnabled: webEnabled),
             retryPolicy: .default,
             metadata: [
                 "entryProvider": provider.rawValue,
-                "promptTemplateID": promptTemplateID.rawValue
+                "promptTemplateID": promptConfiguration.templateID.rawValue,
+                "promptScene": promptConfiguration.scene.rawValue,
+                "promptModule": promptConfiguration.module,
+                "outputFormat": promptConfiguration.outputFormat.rawValue,
+                "promptOverridesApplied": promptOverrides == .none ? "false" : "true"
             ]
         )
     }
@@ -276,6 +323,9 @@ class OllamaManager: ObservableObject {
             routePolicySummary: routePolicySummary(for: request.routePolicy),
             model: request.model,
             promptTemplateID: request.promptTemplateID,
+            promptScene: request.promptScene,
+            promptModule: request.promptModule,
+            outputFormat: request.outputFormat,
             webEnabled: request.contextOptions.webEnabled,
             retryLimit: request.retryPolicy.maxRetries,
             retryCount: 0,

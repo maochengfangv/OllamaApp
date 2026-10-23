@@ -1,12 +1,17 @@
 import Foundation
 
 struct WebSearchContextBuilder: LLMContextBuilding {
+    private let networkTimeout: TimeInterval = 4
+
     func buildContext(for request: AIRequest) async throws -> LLMContextEnvelope {
         guard request.contextOptions.webEnabled else { return .empty }
         let query = request.latestUserMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !query.isEmpty else { return .empty }
+        guard shouldAttemptWebEnrichment(query: query) else {
+            return .empty
+        }
 
-        if let weatherContext = try await fetchWeatherContext(query: query), !weatherContext.isEmpty {
+        if let weatherContext = try? await fetchWeatherContext(query: query), !weatherContext.isEmpty {
             return LLMContextEnvelope(
                 systemMessages: [
                     "You have access to the following real-time data. Use it to answer the user. Do not say you cannot access real-time information.\n\n\(weatherContext)"
@@ -15,7 +20,7 @@ struct WebSearchContextBuilder: LLMContextBuilding {
             )
         }
 
-        if let searchContext = try await fetchDuckDuckGoContext(query: query), !searchContext.isEmpty {
+        if let searchContext = try? await fetchDuckDuckGoContext(query: query), !searchContext.isEmpty {
             return LLMContextEnvelope(
                 systemMessages: [
                     "Web search results for: \(query)\n\(searchContext)\nUse the above information when it is relevant and cite URLs. Do not say you cannot browse."
@@ -24,10 +29,7 @@ struct WebSearchContextBuilder: LLMContextBuilding {
             )
         }
 
-        return LLMContextEnvelope(
-            systemMessages: [],
-            previewText: "【联网结果】\n联网失败：未获取到可用结果（可能被网络限制或查询源无返回）"
-        )
+        return .empty
     }
 
     private struct DuckDuckGoInstantAnswer: Decodable {
@@ -79,6 +81,7 @@ struct WebSearchContextBuilder: LLMContextBuilding {
         guard let url = components.url else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = networkTimeout
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return nil }
@@ -122,6 +125,18 @@ struct WebSearchContextBuilder: LLMContextBuilding {
         let joined = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !joined.isEmpty else { return nil }
         return String(joined.prefix(1500))
+    }
+
+    private func shouldAttemptWebEnrichment(query: String) -> Bool {
+        let normalized = query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "，,。.!！？?、:：；;\"'“”‘’()（）[]【】`"))
+
+        guard normalized.count >= 2 else { return false }
+        let hasMeaningfulText = normalized.rangeOfCharacter(from: .letters) != nil || normalized.rangeOfCharacter(from: CharacterSet(charactersIn: "一-龥")) != nil
+        return hasMeaningfulText
     }
 
     private func fetchWeatherContext(query: String) async throws -> String? {

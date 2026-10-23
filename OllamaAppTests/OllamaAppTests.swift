@@ -108,23 +108,68 @@ final class OllamaAppTests: XCTestCase {
     }
 
     func testAIPromptTemplateRendersEngineeringPrompt() {
-        let rendered = AIPromptTemplateLibrary.render(id: .engineeringChat)
+        let rendered = AIPromptTemplateLibrary.render(
+            id: .engineeringChat,
+            variables: [
+                "scene": "chat",
+                "module": "provider",
+                "output_format": "markdown sections"
+            ]
+        )
         XCTAssertTrue(rendered.contains("software engineer"))
+        XCTAssertTrue(rendered.contains("provider"))
+        XCTAssertTrue(rendered.contains("markdown sections"))
     }
 
     func testAIPromptTemplateSelectorChoosesRequirementAndWebTemplates() {
-        XCTAssertEqual(
-            AIPromptTemplateSelector.select(for: "帮我总结一下这个 PRD 需求", webEnabled: false),
-            .requirementSummary
+        let requirement = AIPromptTemplateSelector.selectConfiguration(
+            for: "帮我总结一下这个 PRD 需求，重点关注 UI 和接口草案",
+            webEnabled: false
         )
-        XCTAssertEqual(
-            AIPromptTemplateSelector.select(for: "帮我搜一下今天北京天气", webEnabled: true),
-            .webResearch
+        XCTAssertEqual(requirement.templateID, .requirementSummary)
+        XCTAssertEqual(requirement.scene, .requirement)
+        XCTAssertEqual(requirement.module, "ui")
+        XCTAssertEqual(requirement.outputFormat, .markdownSections)
+
+        let web = AIPromptTemplateSelector.selectConfiguration(
+            for: "帮我搜一下今天北京天气",
+            webEnabled: true
         )
-        XCTAssertEqual(
-            AIPromptTemplateSelector.select(for: "请给我测试点", webEnabled: false),
-            .testCaseGeneration
+        XCTAssertEqual(web.templateID, .webResearch)
+        XCTAssertEqual(web.scene, .research)
+        XCTAssertEqual(web.outputFormat, .markdownBullets)
+
+        let testing = AIPromptTemplateSelector.selectConfiguration(
+            for: "请给我 provider 模块的测试点",
+            webEnabled: false
         )
+        XCTAssertEqual(testing.templateID, .testCaseGeneration)
+        XCTAssertEqual(testing.scene, .testing)
+        XCTAssertEqual(testing.module, "provider")
+        XCTAssertEqual(testing.outputFormat, .markdownChecklist)
+    }
+
+    func testAIPromptTemplateSelectorExplicitOverridesTakePriority() {
+        let resolved = AIPromptTemplateSelector.resolveConfiguration(
+            for: "请给我 provider 模块的测试点",
+            webEnabled: false,
+            overrides: AIPromptOverrides(
+                templateID: .requirementSummary,
+                scene: .requirement,
+                module: "networking",
+                outputFormat: .markdownSections,
+                variables: ["custom_note": "enabled"]
+            )
+        )
+
+        XCTAssertEqual(resolved.templateID, .requirementSummary)
+        XCTAssertEqual(resolved.scene, .requirement)
+        XCTAssertEqual(resolved.module, "networking")
+        XCTAssertEqual(resolved.outputFormat, .markdownSections)
+        XCTAssertEqual(resolved.variables["scene"], "requirement")
+        XCTAssertEqual(resolved.variables["module"], "networking")
+        XCTAssertEqual(resolved.variables["output_format"], "markdown sections")
+        XCTAssertEqual(resolved.variables["custom_note"], "enabled")
     }
 
     func testAIUsageEstimatorCalculatesTokensAndDeepSeekCost() {
@@ -143,6 +188,26 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertEqual(usage.totalTokens, 30)
         XCTAssertNotNil(usage.estimatedCost)
         XCTAssertTrue((usage.estimatedCost ?? 0) > 0)
+    }
+
+    func testAIRequestResolvedSystemPromptUsesExplicitTemplateParameters() {
+        let request = AIRequest(
+            sessionID: nil,
+            routePolicy: .direct(primary: .ollama, fallback: nil),
+            model: "phi3",
+            messages: [AIMessage(role: .user, content: "帮我分析网络请求")],
+            promptTemplateID: .engineeringChat,
+            promptScene: .research,
+            promptModule: "networking",
+            outputFormat: .markdownBullets,
+            promptVariables: ["extra_hint": "trace carefully"],
+            retryPolicy: .none
+        )
+
+        let prompt = request.resolvedSystemPrompt
+        XCTAssertTrue(prompt.contains("research"))
+        XCTAssertTrue(prompt.contains("networking"))
+        XCTAssertTrue(prompt.contains("markdown bullet list"))
     }
 
     func testAIClientCapabilityRouteSelectsProviderSupportingWebSearch() async {
@@ -212,10 +277,49 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertEqual(manager.latestDebugSnapshot?.status, .completed)
         XCTAssertEqual(manager.latestDebugSnapshot?.resolvedProvider, .ollama)
         XCTAssertEqual(manager.latestDebugSnapshot?.promptTemplateID, .engineeringChat)
+        XCTAssertEqual(manager.latestDebugSnapshot?.promptScene, .chat)
+        XCTAssertEqual(manager.latestDebugSnapshot?.promptModule, "general")
+        XCTAssertEqual(manager.latestDebugSnapshot?.outputFormat, .markdownSections)
         XCTAssertEqual(manager.latestDebugSnapshot?.usage?.outputCharacters, "Hello from stub".count)
 
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_started" }))
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_completed" }))
+    }
+
+    @MainActor
+    func testOllamaManagerGenerateUsesExplicitPromptOverrides() async {
+        let store = ChatSessionStore(
+            provider: .ollama,
+            legacyKeys: [],
+            userDefaults: userDefaults,
+            rootDirectoryOverride: tempDirectory,
+            telemetry: telemetry
+        )
+        let manager = OllamaManager(
+            provider: .ollama,
+            aiClient: AIClient(
+                providerFactory: { _ in StubProvider(provider: .ollama, events: [.delta("Done")]) },
+                contextBuilder: EmptyContextBuilder(),
+                telemetry: telemetry
+            ),
+            sessionStore: store,
+            telemetry: telemetry
+        )
+
+        await manager.generate(
+            prompt: "请给我 provider 模块的测试点",
+            model: "stub-model",
+            promptOverrides: AIPromptOverrides(
+                scene: .requirement,
+                module: "networking",
+                outputFormat: .markdownSections
+            )
+        )
+
+        XCTAssertEqual(manager.latestDebugSnapshot?.promptTemplateID, .testCaseGeneration)
+        XCTAssertEqual(manager.latestDebugSnapshot?.promptScene, .requirement)
+        XCTAssertEqual(manager.latestDebugSnapshot?.promptModule, "networking")
+        XCTAssertEqual(manager.latestDebugSnapshot?.outputFormat, .markdownSections)
     }
 
     @MainActor

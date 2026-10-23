@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Foundation
 
 struct ChatMessageRow: View {
     let message: ChatMessage
@@ -38,8 +39,7 @@ struct ChatMessageRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(message.content)
-                        .foregroundColor(foreground)
+                    messageText(foreground: foreground)
 
                     HStack {
                         Spacer()
@@ -58,6 +58,22 @@ struct ChatMessageRow: View {
                 .background(background)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+        }
+    }
+
+    @ViewBuilder
+    private func messageText(foreground: Color) -> some View {
+        if let attributed = try? AttributedString(
+            markdown: message.content,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        ) {
+            Text(attributed)
+                .foregroundColor(foreground)
+                .textSelection(.enabled)
+        } else {
+            Text(message.content)
+                .foregroundColor(foreground)
+                .textSelection(.enabled)
         }
     }
 

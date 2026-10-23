@@ -19,6 +19,9 @@ struct AIDebugSnapshot: Equatable {
     var routePolicySummary: String
     var model: String
     var promptTemplateID: AIPromptTemplateID
+    var promptScene: AIPromptScene
+    var promptModule: String
+    var outputFormat: AIPromptOutputFormat
     var webEnabled: Bool
     var retryLimit: Int
     var retryCount: Int

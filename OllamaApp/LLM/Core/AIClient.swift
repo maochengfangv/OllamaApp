@@ -24,6 +24,24 @@ final class AIClient: AIClienting {
             let worker = Task {
                 let startDate = Date()
                 let routes = routeSequence(for: request)
+                guard let initialProvider = routes.first else {
+                    let finalError = AIClientError(
+                        code: .unsupportedCapability,
+                        provider: request.preferredProvider,
+                        message: "没有 Provider 能满足当前能力要求",
+                        statusCode: nil
+                    )
+                    finishFailure(
+                        request: request,
+                        provider: request.preferredProvider,
+                        error: finalError,
+                        startDate: startDate,
+                        retryCount: 0,
+                        fallbackUsed: false,
+                        continuation: continuation
+                    )
+                    return
+                }
                 var firstTokenLatencyMs: Int?
                 var usage: AIUsage?
                 var outputCharacters = 0
@@ -33,13 +51,13 @@ final class AIClient: AIClienting {
                 continuation.yield(.started(
                     AIResponseStart(
                         requestID: request.requestID,
-                        provider: request.preferredProvider,
+                        provider: initialProvider,
                         model: request.model
                     )
                 ))
                 telemetry.record(.generationStarted(
                     requestID: request.requestID,
-                    provider: request.preferredProvider,
+                    provider: initialProvider,
                     model: request.model,
                     webEnabled: request.contextOptions.webEnabled,
                     historyCount: request.messages.count,
@@ -65,7 +83,7 @@ final class AIClient: AIClienting {
                     return
                 }
 
-                for route in routes {
+                for (routeIndex, route) in routes.enumerated() {
                     let fallbackUsed = route != request.preferredProvider
 
                     for attemptIndex in 0...request.retryPolicy.maxRetries {
@@ -112,7 +130,7 @@ final class AIClient: AIClienting {
                                 }
                             }
 
-                            let finalUsage = usage ?? AIUsage.estimated(from: request, outputCharacters: outputCharacters)
+                            let finalUsage = usage ?? AIUsage.estimated(from: request, provider: route, outputCharacters: outputCharacters)
                             if usage == nil {
                                 continuation.yield(.usage(finalUsage))
                             }
@@ -135,6 +153,9 @@ final class AIClient: AIClienting {
                                 firstTokenLatencyMs: completion.firstTokenLatencyMs,
                                 retryCount: completion.retryCount,
                                 fallbackUsed: completion.fallbackUsed,
+                                inputTokens: finalUsage.inputTokens,
+                                outputTokens: finalUsage.outputTokens,
+                                totalTokens: finalUsage.totalTokens,
                                 outputLength: finalUsage.outputCharacters,
                                 estimatedCost: finalUsage.estimatedCost
                             ))
@@ -160,7 +181,8 @@ final class AIClient: AIClienting {
                                 continue
                             }
 
-                            if fallbackUsed || request.fallbackProvider == nil {
+                            let hasNextRoute = routeIndex < routes.count - 1
+                            if fallbackUsed || !hasNextRoute {
                                 finishFailure(
                                     request: request,
                                     provider: route,
@@ -202,11 +224,7 @@ final class AIClient: AIClienting {
     }
 
     private func routeSequence(for request: AIRequest) -> [LLMProvider] {
-        var routes = [request.preferredProvider]
-        if let fallbackProvider = request.fallbackProvider, fallbackProvider != request.preferredProvider {
-            routes.append(fallbackProvider)
-        }
-        return routes
+        request.routePolicy.resolveRoutes(from: LLMProvider.allCases)
     }
 
     private func shouldRetry(error: AIClientError) -> Bool {

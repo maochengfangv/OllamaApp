@@ -5,6 +5,7 @@ class OllamaManager: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isGenerating: Bool = false
     @Published var chatHistory: [ChatSession] = []
+    @Published var latestUsage: AIUsage?
 
     let provider: LLMProvider
 
@@ -37,6 +38,7 @@ class OllamaManager: ObservableObject {
         stopGenerating(invalidateGenerationState: true)
         messages = []
         currentSessionId = nil
+        latestUsage = nil
     }
 
     func loadChat(session: ChatSession) {
@@ -44,6 +46,7 @@ class OllamaManager: ObservableObject {
         let storedSession = sessionStore.loadSession(id: session.id) ?? session
         messages = storedSession.messages
         currentSessionId = storedSession.id
+        latestUsage = nil
         telemetry.record(.sessionLoaded(provider: provider, sessionId: storedSession.id, messageCount: storedSession.messages.count))
     }
 
@@ -109,10 +112,11 @@ class OllamaManager: ObservableObject {
         guard !trimmedPrompt.isEmpty else { return }
 
         isGenerating = true
+        latestUsage = nil
         messages = Array(messages.prefix(index + 1))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        await performGeneration(model: model, webEnabled: webEnabled)
+        await performGeneration(model: model, prompt: trimmedPrompt, webEnabled: webEnabled)
     }
 
     func generate(prompt: String, model: String, webEnabled: Bool = false) async {
@@ -122,14 +126,15 @@ class OllamaManager: ObservableObject {
         guard !trimmedPrompt.isEmpty else { return }
 
         isGenerating = true
+        latestUsage = nil
         messages.append(ChatMessage(role: .user, content: trimmedPrompt))
         messages.append(ChatMessage(role: .model, content: ""))
 
-        await performGeneration(model: model, webEnabled: webEnabled)
+        await performGeneration(model: model, prompt: trimmedPrompt, webEnabled: webEnabled)
     }
 
-    private func performGeneration(model: String, webEnabled: Bool) async {
-        let request = makeRequest(model: model, webEnabled: webEnabled)
+    private func performGeneration(model: String, prompt: String, webEnabled: Bool) async {
+        let request = makeRequest(model: model, prompt: prompt, webEnabled: webEnabled)
         let startDate = Date()
         let generationID = request.requestID
         currentGenerationID = generationID
@@ -143,9 +148,10 @@ class OllamaManager: ObservableObject {
                     break
                 case .preview, .delta:
                     apply(event)
-                case .usage:
-                    break
+                case .usage(let usage):
+                    latestUsage = usage
                 case .completed(let completion):
+                    latestUsage = completion.usage
                     outcome = .completed(completion)
                 case .failed(let error):
                     outcome = .failed(error)
@@ -221,18 +227,26 @@ class OllamaManager: ObservableObject {
         ChatSession(id: session.id, messages: [], title: session.title, date: session.date)
     }
 
-    private func makeRequest(model: String, webEnabled: Bool) -> AIRequest {
-        AIRequest(
+    private func makeRequest(model: String, prompt: String, webEnabled: Bool) -> AIRequest {
+        let requiredCapabilities: [AICapability] = webEnabled ? [.webSearch] : []
+        let promptTemplateID = AIPromptTemplateSelector.select(for: prompt, webEnabled: webEnabled)
+
+        return AIRequest(
             sessionID: currentSessionId,
-            preferredProvider: provider,
-            fallbackProvider: nil,
+            routePolicy: .capabilityPreferred(
+                preferred: provider,
+                fallback: nil,
+                required: requiredCapabilities
+            ),
             model: model,
             messages: Array(messages.dropLast()).map(\.aiMessage),
+            promptTemplateID: promptTemplateID,
             timeoutInterval: 60,
             contextOptions: AIContextOptions(webEnabled: webEnabled),
             retryPolicy: .default,
             metadata: [
-                "entryProvider": provider.rawValue
+                "entryProvider": provider.rawValue,
+                "promptTemplateID": promptTemplateID.rawValue
             ]
         )
     }

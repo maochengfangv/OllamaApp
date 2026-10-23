@@ -20,6 +20,9 @@ enum ChatTelemetryEvent: Equatable {
         firstTokenLatencyMs: Int?,
         retryCount: Int,
         fallbackUsed: Bool,
+        inputTokens: Int?,
+        outputTokens: Int?,
+        totalTokens: Int?,
         outputLength: Int,
         estimatedCost: Double?
     )
@@ -62,8 +65,8 @@ enum ChatTelemetryEvent: Equatable {
         switch self {
         case .generationStarted(let requestID, let provider, let model, let webEnabled, let historyCount, let timeoutMs, let retryLimit, let fallbackProvider):
             return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) webEnabled=\(webEnabled) historyCount=\(historyCount) timeoutMs=\(timeoutMs) retryLimit=\(retryLimit) fallbackProvider=\(fallbackProvider?.rawValue ?? "none")"
-        case .generationCompleted(let requestID, let provider, let model, let durationMs, let firstTokenLatencyMs, let retryCount, let fallbackUsed, let outputLength, let estimatedCost):
-            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) firstTokenLatencyMs=\(stringValue(firstTokenLatencyMs)) retryCount=\(retryCount) fallbackUsed=\(fallbackUsed) outputLength=\(outputLength) estimatedCost=\(stringValue(estimatedCost))"
+        case .generationCompleted(let requestID, let provider, let model, let durationMs, let firstTokenLatencyMs, let retryCount, let fallbackUsed, let inputTokens, let outputTokens, let totalTokens, let outputLength, let estimatedCost):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) firstTokenLatencyMs=\(stringValue(firstTokenLatencyMs)) retryCount=\(retryCount) fallbackUsed=\(fallbackUsed) inputTokens=\(stringValue(inputTokens)) outputTokens=\(stringValue(outputTokens)) totalTokens=\(stringValue(totalTokens)) outputLength=\(outputLength) estimatedCost=\(stringValue(estimatedCost))"
         case .generationCancelled(let requestID, let provider, let model, let durationMs, let retryCount, let fallbackUsed, let outputLength):
             return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) retryCount=\(retryCount) fallbackUsed=\(fallbackUsed) outputLength=\(outputLength)"
         case .generationFailed(let requestID, let provider, let model, let durationMs, let retryCount, let fallbackUsed, let errorCode, let message):

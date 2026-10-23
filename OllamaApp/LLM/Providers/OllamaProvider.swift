@@ -77,7 +77,8 @@ struct OllamaProviderClient: LLMGeneratingProvider {
     private func makePrompt(from request: AIRequest, context: LLMContextEnvelope) -> String {
         var lines: [String] = []
 
-        if let systemPrompt = request.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !systemPrompt.isEmpty {
+        let systemPrompt = request.resolvedSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !systemPrompt.isEmpty {
             lines.append("System: \(systemPrompt)")
         }
 

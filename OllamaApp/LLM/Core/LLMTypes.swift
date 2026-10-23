@@ -28,6 +28,24 @@ struct AIMessage: Codable, Equatable {
     let content: String
 }
 
+enum AICapability: String, Codable, Equatable, CaseIterable {
+    case streaming
+    case webSearch
+    case reasoning
+}
+
+struct AIProviderCapabilities: Equatable {
+    let supported: Set<AICapability>
+
+    func supports(_ capability: AICapability) -> Bool {
+        supported.contains(capability)
+    }
+
+    func supports(all required: [AICapability]) -> Bool {
+        required.allSatisfy { supported.contains($0) }
+    }
+}
+
 enum LLMProvider: String, Codable, CaseIterable, Identifiable {
     case ollama
     case deepseek
@@ -90,6 +108,76 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
     var supportsWebEnhancement: Bool {
         self == .deepseek
     }
+
+    var capabilities: AIProviderCapabilities {
+        switch self {
+        case .ollama:
+            return AIProviderCapabilities(supported: [.streaming])
+        case .deepseek:
+            return AIProviderCapabilities(supported: [.webSearch, .reasoning])
+        }
+    }
+}
+
+enum AIRoutePolicy: Equatable {
+    case direct(primary: LLMProvider, fallback: LLMProvider?)
+    case capabilityPreferred(preferred: LLMProvider, fallback: LLMProvider?, required: [AICapability])
+
+    func resolveRoutes(from allProviders: [LLMProvider]) -> [LLMProvider] {
+        switch self {
+        case .direct(let primary, let fallback):
+            return compactUniqueProviders([primary, fallback])
+        case .capabilityPreferred(let preferred, let fallback, let required):
+            let capabilityMatched = allProviders.filter { provider in
+                provider.capabilities.supports(all: required)
+            }
+
+            if required.isEmpty {
+                return compactUniqueProviders([preferred, fallback])
+            }
+
+            var routes = compactUniqueProviders([preferred].filter {
+                $0.capabilities.supports(all: required)
+            })
+
+            if let fallback, fallback.capabilities.supports(all: required) {
+                routes = compactUniqueProviders(routes + [fallback])
+            }
+
+            routes = compactUniqueProviders(routes + capabilityMatched)
+            return routes
+        }
+    }
+
+    var primaryProvider: LLMProvider {
+        switch self {
+        case .direct(let primary, _):
+            return primary
+        case .capabilityPreferred(let preferred, _, _):
+            return preferred
+        }
+    }
+
+    var configuredFallbackProvider: LLMProvider? {
+        switch self {
+        case .direct(_, let fallback):
+            return fallback
+        case .capabilityPreferred(_, let fallback, _):
+            return fallback
+        }
+    }
+}
+
+private func compactUniqueProviders(_ providers: [LLMProvider?]) -> [LLMProvider] {
+    var seen = Set<LLMProvider>()
+    var result: [LLMProvider] = []
+
+    for provider in providers {
+        guard let provider, !seen.contains(provider) else { continue }
+        seen.insert(provider)
+        result.append(provider)
+    }
+    return result
 }
 
 struct AIContextOptions: Codable, Equatable {
@@ -108,11 +196,12 @@ struct AIRetryPolicy: Codable, Equatable {
 struct AIRequest: Equatable {
     let requestID: UUID
     let sessionID: String?
-    let preferredProvider: LLMProvider
-    let fallbackProvider: LLMProvider?
+    let routePolicy: AIRoutePolicy
     let model: String
     let messages: [AIMessage]
     let systemPrompt: String?
+    let promptTemplateID: AIPromptTemplateID
+    let promptVariables: [String: String]
     let temperature: Double?
     let maxTokens: Int?
     let timeoutInterval: TimeInterval
@@ -123,11 +212,12 @@ struct AIRequest: Equatable {
     init(
         requestID: UUID = UUID(),
         sessionID: String?,
-        preferredProvider: LLMProvider,
-        fallbackProvider: LLMProvider? = nil,
+        routePolicy: AIRoutePolicy,
         model: String,
         messages: [AIMessage],
-        systemPrompt: String? = "You are a helpful assistant.",
+        systemPrompt: String? = nil,
+        promptTemplateID: AIPromptTemplateID = .generalChat,
+        promptVariables: [String: String] = [:],
         temperature: Double? = nil,
         maxTokens: Int? = nil,
         timeoutInterval: TimeInterval = 60,
@@ -137,11 +227,12 @@ struct AIRequest: Equatable {
     ) {
         self.requestID = requestID
         self.sessionID = sessionID
-        self.preferredProvider = preferredProvider
-        self.fallbackProvider = fallbackProvider
+        self.routePolicy = routePolicy
         self.model = model
         self.messages = messages
         self.systemPrompt = systemPrompt
+        self.promptTemplateID = promptTemplateID
+        self.promptVariables = promptVariables
         self.temperature = temperature
         self.maxTokens = maxTokens
         self.timeoutInterval = timeoutInterval
@@ -153,23 +244,87 @@ struct AIRequest: Equatable {
     var latestUserMessage: String? {
         messages.last(where: { $0.role == .user })?.content
     }
+
+    var preferredProvider: LLMProvider {
+        routePolicy.primaryProvider
+    }
+
+    var fallbackProvider: LLMProvider? {
+        routePolicy.configuredFallbackProvider
+    }
+
+    var resolvedSystemPrompt: String {
+        if let systemPrompt, !systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return systemPrompt
+        }
+        return AIPromptTemplateLibrary.render(id: promptTemplateID, variables: promptVariables)
+    }
 }
 
 struct AIUsage: Codable, Equatable {
     let inputCharacters: Int?
     let outputCharacters: Int
     let totalCharacters: Int?
+    let inputTokens: Int?
+    let outputTokens: Int?
+    let totalTokens: Int?
     let estimatedCost: Double?
 
-    static func estimated(from request: AIRequest, outputCharacters: Int) -> AIUsage {
+    static func estimated(from request: AIRequest, provider: LLMProvider, outputCharacters: Int) -> AIUsage {
         let inputCharacters = request.messages.reduce(0) { $0 + $1.content.count }
         let totalCharacters = inputCharacters + outputCharacters
+        let inputTokens = AITokenEstimator.estimateTokenCount(forCharacterCount: inputCharacters)
+        let outputTokens = AITokenEstimator.estimateTokenCount(forCharacterCount: outputCharacters)
+        let totalTokens = inputTokens + outputTokens
         return AIUsage(
             inputCharacters: inputCharacters,
             outputCharacters: outputCharacters,
             totalCharacters: totalCharacters,
-            estimatedCost: nil
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            totalTokens: totalTokens,
+            estimatedCost: AIUsageCostEstimator.estimateCost(
+                provider: provider,
+                model: request.model,
+                inputTokens: inputTokens,
+                outputTokens: outputTokens
+            )
         )
+    }
+}
+
+enum AITokenEstimator {
+    static func estimateTokenCount(forCharacterCount characterCount: Int) -> Int {
+        guard characterCount > 0 else { return 0 }
+        return max(Int(ceil(Double(characterCount) / 4.0)), 1)
+    }
+}
+
+struct AIModelPricing {
+    let inputCostPerMillionTokens: Double
+    let outputCostPerMillionTokens: Double
+}
+
+enum AIUsageCostEstimator {
+    static func estimateCost(provider: LLMProvider, model: String, inputTokens: Int, outputTokens: Int) -> Double? {
+        guard let pricing = pricing(for: provider, model: model) else { return nil }
+        let inputCost = (Double(inputTokens) / 1_000_000.0) * pricing.inputCostPerMillionTokens
+        let outputCost = (Double(outputTokens) / 1_000_000.0) * pricing.outputCostPerMillionTokens
+        return inputCost + outputCost
+    }
+
+    private static func pricing(for provider: LLMProvider, model: String) -> AIModelPricing? {
+        switch provider {
+        case .ollama:
+            return AIModelPricing(inputCostPerMillionTokens: 0, outputCostPerMillionTokens: 0)
+        case .deepseek:
+            let normalized = model.lowercased()
+            if normalized.contains("flash") {
+                // Rough local estimate for observability only; update when provider pricing changes.
+                return AIModelPricing(inputCostPerMillionTokens: 0.10, outputCostPerMillionTokens: 0.28)
+            }
+            return AIModelPricing(inputCostPerMillionTokens: 0.27, outputCostPerMillionTokens: 1.10)
+        }
     }
 }
 

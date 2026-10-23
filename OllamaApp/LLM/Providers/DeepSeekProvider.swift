@@ -48,7 +48,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         }
 
         var messages: [DeepSeekChatCompletionRequest.Message] = [
-            .init(role: "system", content: request.systemPrompt ?? "You are a helpful assistant.")
+            .init(role: "system", content: request.resolvedSystemPrompt)
         ]
         messages.append(contentsOf: context.systemMessages.map { .init(role: "system", content: $0) })
         messages.append(contentsOf: request.messages.compactMap { message in

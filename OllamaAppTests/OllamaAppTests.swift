@@ -107,6 +107,79 @@ final class OllamaAppTests: XCTestCase {
         }))
     }
 
+    func testAIPromptTemplateRendersEngineeringPrompt() {
+        let rendered = AIPromptTemplateLibrary.render(id: .engineeringChat)
+        XCTAssertTrue(rendered.contains("software engineer"))
+    }
+
+    func testAIPromptTemplateSelectorChoosesRequirementAndWebTemplates() {
+        XCTAssertEqual(
+            AIPromptTemplateSelector.select(for: "帮我总结一下这个 PRD 需求", webEnabled: false),
+            .requirementSummary
+        )
+        XCTAssertEqual(
+            AIPromptTemplateSelector.select(for: "帮我搜一下今天北京天气", webEnabled: true),
+            .webResearch
+        )
+        XCTAssertEqual(
+            AIPromptTemplateSelector.select(for: "请给我测试点", webEnabled: false),
+            .testCaseGeneration
+        )
+    }
+
+    func testAIUsageEstimatorCalculatesTokensAndDeepSeekCost() {
+        let request = AIRequest(
+            sessionID: nil,
+            routePolicy: .direct(primary: .deepseek, fallback: nil),
+            model: "deepseek-v4-flash",
+            messages: [AIMessage(role: .user, content: String(repeating: "a", count: 80))],
+            promptTemplateID: .generalChat,
+            retryPolicy: .none
+        )
+
+        let usage = AIUsage.estimated(from: request, provider: .deepseek, outputCharacters: 40)
+        XCTAssertEqual(usage.inputTokens, 20)
+        XCTAssertEqual(usage.outputTokens, 10)
+        XCTAssertEqual(usage.totalTokens, 30)
+        XCTAssertNotNil(usage.estimatedCost)
+        XCTAssertTrue((usage.estimatedCost ?? 0) > 0)
+    }
+
+    func testAIClientCapabilityRouteSelectsProviderSupportingWebSearch() async {
+        let routeRecorder = RouteRecorder()
+        let client = AIClient(
+            providerFactory: { provider in
+                CapabilityRecordingProvider(
+                    provider: provider,
+                    routeRecorder: routeRecorder,
+                    events: [.delta("\(provider.rawValue)-response")]
+                )
+            },
+            contextBuilder: EmptyContextBuilder(),
+            telemetry: telemetry
+        )
+
+        let request = AIRequest(
+            sessionID: nil,
+            routePolicy: .capabilityPreferred(preferred: .ollama, fallback: .deepseek, required: [.webSearch]),
+            model: "capability-model",
+            messages: [AIMessage(role: .user, content: "who are you")],
+            contextOptions: AIContextOptions(webEnabled: true),
+            retryPolicy: .none
+        )
+
+        var completion: AIResponseCompletion?
+        for await event in client.responseStream(for: request) {
+            if case .completed(let value) = event {
+                completion = value
+            }
+        }
+
+        let invokedProviders = await routeRecorder.providers
+        XCTAssertEqual(invokedProviders, [.deepseek])
+        XCTAssertEqual(completion?.provider, .deepseek)
+    }
+
     @MainActor
     func testOllamaManagerGenerateRecordsTelemetry() async {
         let store = ChatSessionStore(
@@ -134,6 +207,8 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertEqual(manager.messages.last?.content, "Hello from stub")
         XCTAssertFalse(manager.isGenerating)
         XCTAssertEqual(manager.chatHistory.count, 1)
+        XCTAssertEqual(manager.latestUsage?.outputCharacters, "Hello from stub".count)
+        XCTAssertEqual(manager.latestUsage?.estimatedCost, 0)
 
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_started" }))
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_completed" }))
@@ -321,6 +396,30 @@ private final class TelemetrySpy: ChatTelemetryRecording {
 private struct EmptyContextBuilder: LLMContextBuilding {
     func buildContext(for request: AIRequest) async throws -> LLMContextEnvelope {
         .empty
+    }
+}
+
+private actor RouteRecorder {
+    private(set) var providers: [LLMProvider] = []
+
+    func append(_ provider: LLMProvider) {
+        providers.append(provider)
+    }
+}
+
+private struct CapabilityRecordingProvider: LLMGeneratingProvider {
+    let provider: LLMProvider
+    let routeRecorder: RouteRecorder
+    let events: [AIProviderChunk]
+
+    func responseStream(for request: AIRequest, context: LLMContextEnvelope) async throws -> AsyncThrowingStream<AIProviderChunk, Error> {
+        await routeRecorder.append(provider)
+        return AsyncThrowingStream { continuation in
+            for event in events {
+                continuation.yield(event)
+            }
+            continuation.finish()
+        }
     }
 }
 

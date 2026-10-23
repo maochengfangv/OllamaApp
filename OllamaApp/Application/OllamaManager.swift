@@ -53,6 +53,13 @@ class OllamaManager: ObservableObject {
         telemetry.record(.sessionLoaded(provider: provider, sessionId: storedSession.id, messageCount: storedSession.messages.count))
     }
 
+    func loadChat(sessionID: String) {
+        guard let session = chatHistory.first(where: { $0.id == sessionID }) ?? sessionStore.loadSession(id: sessionID) else {
+            return
+        }
+        loadChat(session: session)
+    }
+
     private func loadHistory() {
         chatHistory = sessionStore.loadSessionSummaries()
     }

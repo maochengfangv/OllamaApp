@@ -29,7 +29,7 @@ class OllamaManager: ObservableObject {
         self.aiClient = aiClient ?? AIClient(telemetry: telemetry)
         self.sessionStore = sessionStore ?? ChatSessionStore(
             provider: provider,
-            legacyKeys: provider == .ollama ? ["ChatHistory_ollama", "OllamaChatHistory"] : ["ChatHistory_\(provider.rawValue)"],
+            legacyKeys: ["ChatHistory_\(provider.rawValue)"],
             telemetry: telemetry
         )
         loadHistory()

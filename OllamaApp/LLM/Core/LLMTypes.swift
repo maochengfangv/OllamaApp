@@ -47,18 +47,12 @@ struct AIProviderCapabilities: Equatable {
 }
 
 enum LLMProvider: String, Codable, CaseIterable, Identifiable {
-    case ollama
     case deepseek
 
     var id: String { rawValue }
 
     var displayName: String {
-        switch self {
-        case .ollama:
-            return "Ollama"
-        case .deepseek:
-            return "DeepSeek"
-        }
+        "DeepSeek"
     }
 
     var historyTitle: String {
@@ -70,52 +64,27 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
     }
 
     var selectedModelKey: String {
-        switch self {
-        case .ollama:
-            return "SelectedOllamaModel"
-        case .deepseek:
-            return "SelectedDeepSeekModel"
-        }
+        "SelectedDeepSeekModel"
     }
 
     var defaultModel: String {
-        switch self {
-        case .ollama:
-            return "phi3"
-        case .deepseek:
-            return "deepseek-v4-flash"
-        }
+        "deepseek-v4-flash"
     }
 
     var modelPlaceholder: String {
-        switch self {
-        case .ollama:
-            return "Model (e.g. llama3)"
-        case .deepseek:
-            return "Model (e.g. deepseek-v4-flash)"
-        }
+        "Model (e.g. deepseek-v4-flash)"
     }
 
     var accentColorName: String {
-        switch self {
-        case .ollama:
-            return "blue"
-        case .deepseek:
-            return "green"
-        }
+        "green"
     }
 
     var supportsWebEnhancement: Bool {
-        self == .deepseek
+        true
     }
 
     var capabilities: AIProviderCapabilities {
-        switch self {
-        case .ollama:
-            return AIProviderCapabilities(supported: [.streaming])
-        case .deepseek:
-            return AIProviderCapabilities(supported: [.webSearch, .reasoning])
-        }
+        AIProviderCapabilities(supported: [.webSearch, .reasoning])
     }
 }
 
@@ -328,17 +297,11 @@ enum AIUsageCostEstimator {
     }
 
     private static func pricing(for provider: LLMProvider, model: String) -> AIModelPricing? {
-        switch provider {
-        case .ollama:
-            return AIModelPricing(inputCostPerMillionTokens: 0, outputCostPerMillionTokens: 0)
-        case .deepseek:
-            let normalized = model.lowercased()
-            if normalized.contains("flash") {
-                // Rough local estimate for observability only; update when provider pricing changes.
-                return AIModelPricing(inputCostPerMillionTokens: 0.10, outputCostPerMillionTokens: 0.28)
-            }
-            return AIModelPricing(inputCostPerMillionTokens: 0.27, outputCostPerMillionTokens: 1.10)
+        let normalized = model.lowercased()
+        if normalized.contains("flash") {
+            return AIModelPricing(inputCostPerMillionTokens: 0.10, outputCostPerMillionTokens: 0.28)
         }
+        return AIModelPricing(inputCostPerMillionTokens: 0.27, outputCostPerMillionTokens: 1.10)
     }
 }
 

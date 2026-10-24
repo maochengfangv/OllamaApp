@@ -40,7 +40,7 @@ final class OllamaAppTests: XCTestCase {
 
     func testChatSessionStorePersistsIndexAndFullSession() throws {
         let store = ChatSessionStore(
-            provider: .ollama,
+            provider: .deepseek,
             legacyKeys: ["LegacyKey"],
             userDefaults: userDefaults,
             rootDirectoryOverride: tempDirectory,
@@ -73,39 +73,6 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertNil(store.loadSession(id: "session-1"))
     }
 
-    func testChatSessionStoreMigratesLegacyHistory() throws {
-        let legacySession = ChatSession(
-            id: "legacy-1",
-            messages: [
-                ChatMessage(role: .user, content: "Legacy prompt"),
-                ChatMessage(role: .model, content: "Legacy answer")
-            ],
-            title: "Legacy",
-            date: Date()
-        )
-        let legacyKey = "ChatHistory_ollama"
-        let data = try JSONEncoder().encode([legacySession])
-        userDefaults.set(data, forKey: legacyKey)
-
-        let store = ChatSessionStore(
-            provider: .ollama,
-            legacyKeys: [legacyKey],
-            userDefaults: userDefaults,
-            rootDirectoryOverride: tempDirectory,
-            telemetry: telemetry
-        )
-
-        let summaries = store.loadSessionSummaries()
-        XCTAssertEqual(summaries.count, 1)
-        XCTAssertEqual(summaries.first?.id, "legacy-1")
-        XCTAssertEqual(store.loadSession(id: "legacy-1")?.messages.count, 2)
-        XCTAssertTrue(telemetry.events.contains(where: { event in
-            if case .legacyHistoryMigrated(let provider, let count) = event {
-                return provider == .ollama && count == 1
-            }
-            return false
-        }))
-    }
 
     func testAIPromptTemplateRendersEngineeringPrompt() {
         let rendered = AIPromptTemplateLibrary.render(
@@ -193,7 +160,7 @@ final class OllamaAppTests: XCTestCase {
     func testAIRequestResolvedSystemPromptUsesExplicitTemplateParameters() {
         let request = AIRequest(
             sessionID: nil,
-            routePolicy: .direct(primary: .ollama, fallback: nil),
+            routePolicy: .direct(primary: .deepseek, fallback: nil),
             model: "phi3",
             messages: [AIMessage(role: .user, content: "帮我分析网络请求")],
             promptTemplateID: .engineeringChat,
@@ -210,54 +177,20 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertTrue(prompt.contains("markdown bullet list"))
     }
 
-    func testAIClientCapabilityRouteSelectsProviderSupportingWebSearch() async {
-        let routeRecorder = RouteRecorder()
-        let client = AIClient(
-            providerFactory: { provider in
-                CapabilityRecordingProvider(
-                    provider: provider,
-                    routeRecorder: routeRecorder,
-                    events: [.delta("\(provider.rawValue)-response")]
-                )
-            },
-            contextBuilder: EmptyContextBuilder(),
-            telemetry: telemetry
-        )
-
-        let request = AIRequest(
-            sessionID: nil,
-            routePolicy: .capabilityPreferred(preferred: .ollama, fallback: .deepseek, required: [.webSearch]),
-            model: "capability-model",
-            messages: [AIMessage(role: .user, content: "who are you")],
-            contextOptions: AIContextOptions(webEnabled: true),
-            retryPolicy: .none
-        )
-
-        var completion: AIResponseCompletion?
-        for await event in client.responseStream(for: request) {
-            if case .completed(let value) = event {
-                completion = value
-            }
-        }
-
-        let invokedProviders = await routeRecorder.providers
-        XCTAssertEqual(invokedProviders, [.deepseek])
-        XCTAssertEqual(completion?.provider, .deepseek)
-    }
 
     @MainActor
     func testOllamaManagerGenerateRecordsTelemetry() async {
         let store = ChatSessionStore(
-            provider: .ollama,
+            provider: .deepseek,
             legacyKeys: [],
             userDefaults: userDefaults,
             rootDirectoryOverride: tempDirectory,
             telemetry: telemetry
         )
         let manager = OllamaManager(
-            provider: .ollama,
+            provider: .deepseek,
             aiClient: AIClient(
-                providerFactory: { _ in StubProvider(provider: .ollama, events: [.delta("Hello from stub")]) },
+                providerFactory: { _ in StubProvider(provider: .deepseek, events: [.delta("Hello from stub")]) },
                 contextBuilder: EmptyContextBuilder(),
                 telemetry: telemetry
             ),
@@ -275,7 +208,7 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertEqual(manager.latestUsage?.outputCharacters, "Hello from stub".count)
         XCTAssertEqual(manager.latestUsage?.estimatedCost, 0)
         XCTAssertEqual(manager.latestDebugSnapshot?.status, .completed)
-        XCTAssertEqual(manager.latestDebugSnapshot?.resolvedProvider, .ollama)
+        XCTAssertEqual(manager.latestDebugSnapshot?.resolvedProvider, .deepseek)
         XCTAssertEqual(manager.latestDebugSnapshot?.promptTemplateID, .engineeringChat)
         XCTAssertEqual(manager.latestDebugSnapshot?.promptScene, .chat)
         XCTAssertEqual(manager.latestDebugSnapshot?.promptModule, "general")
@@ -289,16 +222,16 @@ final class OllamaAppTests: XCTestCase {
     @MainActor
     func testOllamaManagerGenerateUsesExplicitPromptOverrides() async {
         let store = ChatSessionStore(
-            provider: .ollama,
+            provider: .deepseek,
             legacyKeys: [],
             userDefaults: userDefaults,
             rootDirectoryOverride: tempDirectory,
             telemetry: telemetry
         )
         let manager = OllamaManager(
-            provider: .ollama,
+            provider: .deepseek,
             aiClient: AIClient(
-                providerFactory: { _ in StubProvider(provider: .ollama, events: [.delta("Done")]) },
+                providerFactory: { _ in StubProvider(provider: .deepseek, events: [.delta("Done")]) },
                 contextBuilder: EmptyContextBuilder(),
                 telemetry: telemetry
             ),

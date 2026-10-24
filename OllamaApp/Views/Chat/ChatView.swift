@@ -18,7 +18,7 @@ struct ChatView: View {
     }
 
     private var accentColor: Color {
-        provider == .ollama ? .blue : .green
+        .green
     }
 
     private var effectiveWebEnabled: Bool {

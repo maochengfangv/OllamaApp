@@ -113,11 +113,6 @@ enum LLMProviderError: LocalizedError {
 
 enum LLMProviderFactory {
     static func makeProvider(for provider: LLMProvider) -> any LLMGeneratingProvider {
-        switch provider {
-        case .ollama:
-            return OllamaProviderClient()
-        case .deepseek:
-            return DeepSeekProviderClient()
-        }
+        DeepSeekProviderClient()
     }
 }

@@ -1,13 +1,11 @@
 import SwiftUI
 
 struct HistorySessionsView: View {
-    @ObservedObject var ollamaManager: OllamaManager
     @ObservedObject var deepSeekManager: OllamaManager
     let onSelectSession: (LLMProvider, ChatSession) -> Void
 
     var body: some View {
         List {
-            providerSection(provider: .ollama, manager: ollamaManager)
             providerSection(provider: .deepseek, manager: deepSeekManager)
         }
         .listStyle(.insetGrouped)
@@ -46,10 +44,10 @@ private struct HistorySessionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: provider == .ollama ? "cpu" : "globe")
-                .foregroundColor(provider == .ollama ? .blue : .green)
+            Image(systemName: "globe")
+                .foregroundColor(.green)
                 .frame(width: 28, height: 28)
-                .background((provider == .ollama ? Color.blue : Color.green).opacity(0.12))
+                .background(Color.green.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 4) {

@@ -6,7 +6,6 @@ private enum HomeDestination: Hashable {
 }
 
 struct ContentView: View {
-    @StateObject private var ollamaManager = OllamaManager(provider: .ollama)
     @StateObject private var deepSeekManager = OllamaManager(provider: .deepseek)
     @State private var navigationPath: [HomeDestination] = []
     @State private var isHistoryDrawerPresented: Bool = false
@@ -65,7 +64,6 @@ struct ContentView: View {
                 }
                 .padding(.top, 20)
 
-                newChatCard(for: .ollama)
                 newChatCard(for: .deepseek)
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -105,7 +103,7 @@ struct ContentView: View {
                     Text(provider.newChatTitle)
                         .font(.headline)
                         .foregroundColor(.primary)
-                    Text(provider == .ollama ? "本地模型，适合快速验证" : "云端模型，支持联网增强")
+                    Text("云端模型，支持联网增强")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -148,7 +146,6 @@ struct ContentView: View {
             Divider()
 
             HistorySessionsView(
-                ollamaManager: ollamaManager,
                 deepSeekManager: deepSeekManager,
                 onSelectSession: { provider, session in
                     openHistorySession(provider: provider, sessionID: session.id)
@@ -176,11 +173,11 @@ struct ContentView: View {
     }
 
     private func manager(for provider: LLMProvider) -> OllamaManager {
-        provider == .ollama ? ollamaManager : deepSeekManager
+        deepSeekManager
     }
 
     private func accentColor(for provider: LLMProvider) -> Color {
-        provider == .ollama ? .blue : .green
+        .green
     }
 
     private func toggleHistoryDrawer() {

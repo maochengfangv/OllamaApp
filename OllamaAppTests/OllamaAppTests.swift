@@ -258,20 +258,20 @@ final class OllamaAppTests: XCTestCase {
     @MainActor
     func testOllamaManagerStopGeneratingTransitionsToCancelledState() async {
         let store = ChatSessionStore(
-            provider: .ollama,
+            provider: .deepseek,
             legacyKeys: [],
             userDefaults: userDefaults,
             rootDirectoryOverride: tempDirectory,
             telemetry: telemetry
         )
         let provider = PlannedProvider(
-            provider: .ollama,
+            provider: .deepseek,
             plans: [
                 .events([.delta("partial output")], stepDelayNanoseconds: 300_000_000)
             ]
         )
         let manager = OllamaManager(
-            provider: .ollama,
+            provider: .deepseek,
             aiClient: AIClient(
                 providerFactory: { _ in provider },
                 contextBuilder: EmptyContextBuilder(),
@@ -302,14 +302,14 @@ final class OllamaAppTests: XCTestCase {
     @MainActor
     func testOllamaManagerRetryAfterFailureTransitionsBackToCompletedState() async throws {
         let store = ChatSessionStore(
-            provider: .ollama,
+            provider: .deepseek,
             legacyKeys: [],
             userDefaults: userDefaults,
             rootDirectoryOverride: tempDirectory,
             telemetry: telemetry
         )
         let provider = PlannedProvider(
-            provider: .ollama,
+            provider: .deepseek,
             plans: [
                 .failure("Stub failure"),
                 .failure("Stub failure"),
@@ -317,7 +317,7 @@ final class OllamaAppTests: XCTestCase {
             ]
         )
         let manager = OllamaManager(
-            provider: .ollama,
+            provider: .deepseek,
             aiClient: AIClient(
                 providerFactory: { _ in provider },
                 contextBuilder: EmptyContextBuilder(),
@@ -353,7 +353,7 @@ final class OllamaAppTests: XCTestCase {
     @MainActor
     func testOllamaManagerSwitchSessionWhileGeneratingCancelsAndLoadsTargetSession() async throws {
         let store = ChatSessionStore(
-            provider: .ollama,
+            provider: .deepseek,
             legacyKeys: [],
             userDefaults: userDefaults,
             rootDirectoryOverride: tempDirectory,
@@ -385,13 +385,13 @@ final class OllamaAppTests: XCTestCase {
         ])
 
         let provider = PlannedProvider(
-            provider: .ollama,
+            provider: .deepseek,
             plans: [
                 .events([.delta("streaming")], stepDelayNanoseconds: 300_000_000)
             ]
         )
         let manager = OllamaManager(
-            provider: .ollama,
+            provider: .deepseek,
             aiClient: AIClient(
                 providerFactory: { _ in provider },
                 contextBuilder: EmptyContextBuilder(),
@@ -419,7 +419,7 @@ final class OllamaAppTests: XCTestCase {
         XCTAssertTrue(telemetry.events.contains(where: { $0.name == "generation_cancelled" }))
         XCTAssertTrue(telemetry.events.contains(where: { event in
             if case .sessionLoaded(let provider, let sessionId, let messageCount) = event {
-                return provider == .ollama && sessionId == "session-b" && messageCount == 2
+                return provider == .deepseek && sessionId == "session-b" && messageCount == 2
             }
             return false
         }))

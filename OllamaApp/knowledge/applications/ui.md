@@ -12,12 +12,12 @@ evidence:
 # UI 模块（SwiftUI）
 
 ## AI 使用摘要
-- 适用场景：改聊天 UI、修自动滚动、优化交互细节
-- 关键入口：ContentView / OllamaChatView / DeepSeekChatView / ChatMessageRow
+- 适用场景：改聊天 UI、修自动滚动、优化抽屉与历史会话交互
+- 关键入口：ContentView / ChatView / HistorySessionsView / ChatMessageRow
 
 ## 职责与边界
 - 职责：输入、发送、停止、消息展示、历史列表、设置页
-- 边界：生成逻辑与网络在 OllamaManager；UI 只驱动动作与展示状态
+- 边界：生成逻辑与网络在 `OllamaManager` 编排层；UI 只驱动动作与展示状态
 
 ## 关键交互（以代码为准）
 - 生成中：

@@ -6,32 +6,28 @@ updatedAt: YYYY-MM-DD
 stability: stable
 confidence: high
 evidence:
-  - code: OllamaApp/OllamaApp/OllamaManager.swift (baseURL)
-  - code: OllamaApp/OllamaApp/Info.plist (ATS)
+  - code: OllamaApp/OllamaApp/Views/Settings/DeepSeekSettingsView.swift
+  - code: OllamaApp/OllamaApp/LLM/Providers/DeepSeekProvider.swift
 ---
 
 # Networking / ATS / Simulator vs Device
 
 ## AI 使用摘要
-- 适用场景：连本地 Ollama、处理网络错误、准备真机联调
-- 使用前必须核对：当前 baseURL、端口、是否走代理/隧道、真机网络环境
+- 适用场景：排查 DeepSeek 请求失败、Base URL 配置错误、超时或鉴权问题
+- 使用前必须核对：当前 Base URL、API Key、网络环境、服务端返回码
 
 ## 稳定事实（必须遵守）
-- 模拟器访问本机服务：优先用 127.0.0.1（避免 localhost 解析到 IPv6 ::1 导致拒绝连接）
-- 访问 HTTP（Ollama 默认）：需要 ATS 配置允许（当前项目已开启 NSAllowsArbitraryLoads）
+- 当前主链路为云端 HTTPS 请求，不依赖本地 127.0.0.1 服务
+- API Key 必须来自 Keychain，不能回退到 UserDefaults 明文存储
 
 ## 当前项目配置（以代码为准）
-- Ollama baseURL：OllamaApp/OllamaApp/OllamaManager.swift（baseURL 常量）
-- ATS：OllamaApp/OllamaApp/Info.plist（NSAllowsArbitraryLoads = true）
-
-## 真机连接策略（约束）
-- 真机无法用 127.0.0.1 访问 Mac 上的 Ollama
-- 需要改为：局域网 IP / 端口映射 / 隧道（并记录“选择哪一种、对应 URL”）
+- Base URL：由 `DeepSeekSettingsView` 管理并持久化
+- 网络请求：由 `DeepSeekProvider` 统一发起
 
 ## 排障最小路径
-- 症状：connection refused / timeout / 非 200
+- 症状：timeout / 401 / 403 / 非 200 / 返回体解析失败
 - 检查顺序：
-  1) Ollama 是否在跑、端口是否 11434
-  2) URL 是否可达（模拟器/真机分别验证）
-  3) ATS 是否被收紧（如果未来改为白名单）
-  4) 返回码与 error body（Ollama 非 200 会拼接 Details）
+  1) API Key 是否存在且未过期
+  2) Base URL 是否指向可用的 `/chat/completions` 服务
+  3) 网络环境是否阻断外网 HTTPS
+  4) 返回码与错误响应体是否提示鉴权、限流或服务异常

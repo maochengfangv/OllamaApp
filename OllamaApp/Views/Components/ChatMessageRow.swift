@@ -5,6 +5,7 @@ import Foundation
 struct ChatMessageRow: View {
     let message: ChatMessage
     let isGenerating: Bool
+    let isStreaming: Bool
     let onResend: (() -> Void)?
     @State private var didCopy: Bool = false
 
@@ -63,7 +64,11 @@ struct ChatMessageRow: View {
 
     @ViewBuilder
     private func messageText(foreground: Color) -> some View {
-        if let attributed = try? AttributedString(
+        if message.role == .model, isStreaming {
+            Text(message.content)
+                .foregroundColor(foreground)
+                .textSelection(.enabled)
+        } else if let attributed = try? AttributedString(
             markdown: message.content,
             options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
         ) {

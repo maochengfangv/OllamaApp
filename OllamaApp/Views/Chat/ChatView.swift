@@ -66,6 +66,7 @@ struct ChatView: View {
                         ChatMessageRow(
                             message: message,
                             isGenerating: manager.isGenerating,
+                            isStreaming: manager.isGenerating && message.role == .model && message.id == manager.messages.last?.id,
                             onResend: message.role == .user ? {
                                 Task {
                                     await manager.resend(
@@ -84,10 +85,10 @@ struct ChatView: View {
                 }
                 .listStyle(PlainListStyle())
                 .onChange(of: manager.messages) { _, _ in
-                    scrollToBottom(using: proxy)
+                    scrollToBottom(using: proxy, animated: true)
                 }
                 .onChange(of: manager.messages.last?.content) { _, _ in
-                    scrollToBottom(using: proxy)
+                    scrollToBottom(using: proxy, animated: false)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -149,11 +150,14 @@ struct ChatView: View {
         }
     }
 
-    private func scrollToBottom(using proxy: ScrollViewProxy) {
-        if let lastId = manager.messages.last?.id {
+    private func scrollToBottom(using proxy: ScrollViewProxy, animated: Bool) {
+        guard let lastId = manager.messages.last?.id else { return }
+        if animated {
             withAnimation {
                 proxy.scrollTo(lastId, anchor: .bottom)
             }
+        } else {
+            proxy.scrollTo(lastId, anchor: .bottom)
         }
     }
 }

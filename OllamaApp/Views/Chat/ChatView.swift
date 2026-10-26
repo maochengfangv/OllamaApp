@@ -152,12 +152,14 @@ struct ChatView: View {
 
     private func scrollToBottom(using proxy: ScrollViewProxy, animated: Bool) {
         guard let lastId = manager.messages.last?.id else { return }
-        if animated {
-            withAnimation {
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation {
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
+            } else {
                 proxy.scrollTo(lastId, anchor: .bottom)
             }
-        } else {
-            proxy.scrollTo(lastId, anchor: .bottom)
         }
     }
 }

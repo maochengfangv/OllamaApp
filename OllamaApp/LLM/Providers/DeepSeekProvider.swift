@@ -34,6 +34,19 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         let choices: [Choice]
     }
 
+    private struct DeepSeekChatCompletionStreamResponse: Decodable {
+        struct Choice: Decodable {
+            struct Delta: Decodable {
+                let content: String?
+            }
+
+            let delta: Delta?
+            let finish_reason: String?
+        }
+
+        let choices: [Choice]
+    }
+
     func responseStream(for request: AIRequest, context: LLMContextEnvelope) async throws -> AsyncThrowingStream<AIProviderChunk, Error> {
         let apiKey = KeychainStore.shared.get(service: Bundle.main.bundleIdentifier ?? "OllamaApp", account: "deepseek_api_key")
         guard let apiKey, !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -68,7 +81,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
             messages: messages,
             thinking: .init(type: "enabled"),
             reasoning_effort: "high",
-            stream: false
+            stream: true
         )
         let encodedBody = try JSONEncoder().encode(body)
 
@@ -86,29 +99,38 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                         var urlRequest = URLRequest(url: url)
                         urlRequest.httpMethod = "POST"
                         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                         urlRequest.timeoutInterval = request.timeoutInterval
                         urlRequest.httpBody = encodedBody
 
-                        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+                        let (result, response) = try await URLSession.shared.bytes(for: urlRequest)
                         guard let httpResponse = response as? HTTPURLResponse else {
                             lastError = "DeepSeek 响应异常"
                             continue
                         }
 
                         if httpResponse.statusCode == 200 {
-                            guard let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionResponse.self, from: data),
-                                  let content = decoded.choices.first?.message.content else {
-                                throw LLMProviderError.decodingFailed("DeepSeek 响应解析失败")
+                            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+                            if contentType.contains("text/event-stream") {
+                                try await consumeSSE(
+                                    from: result.lines,
+                                    previewText: context.previewText,
+                                    continuation: continuation
+                                )
+                            } else {
+                                let data = try await collectData(from: result)
+                                try consumeJSONFallback(
+                                    data: data,
+                                    previewText: context.previewText,
+                                    continuation: continuation
+                                )
                             }
-
-                            let prefix = context.previewText == nil ? "" : "\n\n【回答】\n"
-                            continuation.yield(.delta(prefix + content))
                             continuation.finish()
                             return
                         }
 
-                        let errorBody = String(data: data, encoding: .utf8) ?? ""
+                        let errorBody = try await collectStringLines(from: result.lines)
                         lastError = "DeepSeek 请求失败：\(httpResponse.statusCode)\n\(errorBody)"
 
                         if httpResponse.statusCode == 404, index < urls.count - 1 {
@@ -128,6 +150,71 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                 worker.cancel()
             }
         }
+    }
+
+    private func consumeSSE<Lines: AsyncSequence>(
+        from lines: Lines,
+        previewText: String?,
+        continuation: AsyncThrowingStream<AIProviderChunk, Error>.Continuation
+    ) async throws where Lines.Element == String {
+        var hasYieldedAnswerPrefix = false
+
+        for try await line in lines {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+
+            let trimmed = line.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            guard !trimmed.isEmpty, trimmed.hasPrefix("data:") else { continue }
+
+            let payload = String(trimmed.dropFirst(5)).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            if payload == "[DONE]" {
+                return
+            }
+
+            guard let data = payload.data(using: String.Encoding.utf8),
+                  let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionStreamResponse.self, from: data),
+                  let content = decoded.choices.first?.delta?.content,
+                  !content.isEmpty else {
+                continue
+            }
+
+            if !hasYieldedAnswerPrefix, previewText != nil {
+                continuation.yield(.delta("\n\n【回答】\n"))
+                hasYieldedAnswerPrefix = true
+            }
+            continuation.yield(.delta(content))
+        }
+    }
+
+    private func consumeJSONFallback(
+        data: Data,
+        previewText: String?,
+        continuation: AsyncThrowingStream<AIProviderChunk, Error>.Continuation
+    ) throws {
+        guard let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionResponse.self, from: data),
+              let content = decoded.choices.first?.message.content else {
+            throw LLMProviderError.decodingFailed("DeepSeek 响应解析失败")
+        }
+
+        let prefix = previewText == nil ? "" : "\n\n【回答】\n"
+        continuation.yield(.delta(prefix + content))
+    }
+
+    private func collectData(from bytes: URLSession.AsyncBytes) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            data.append(contentsOf: [byte])
+        }
+        return data
+    }
+
+    private func collectStringLines<Lines: AsyncSequence>(from lines: Lines) async throws -> String where Lines.Element == String {
+        var result = ""
+        for try await line in lines {
+            result += line + "\n"
+        }
+        return result.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
     }
 
     private func deepSeekChatCompletionsURLs(fromBase base: String) -> [URL] {

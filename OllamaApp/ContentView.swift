@@ -9,6 +9,7 @@ struct ContentView: View {
     @StateObject private var deepSeekManager = OllamaManager(provider: .deepseek)
     @State private var navigationPath: [HomeDestination] = []
     @State private var isHistoryDrawerPresented: Bool = false
+    @State private var isTodoAgentPresented: Bool = false
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -40,6 +41,17 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("历史会话")
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isTodoAgentPresented = true
+                    } label: {
+                        Image(systemName: "checklist")
+                    }
+                    .accessibilityLabel("待办 Agent")
+                }
+            }
+            .sheet(isPresented: $isTodoAgentPresented) {
+                TodoAgentDebugView()
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {

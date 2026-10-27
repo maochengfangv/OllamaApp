@@ -243,7 +243,7 @@ struct TodoAgentDebugView: View {
         if line.role == "agent",
            let attributed = try? AttributedString(
                markdown: line.text,
-               options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+               options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
            ) {
             Text(attributed)
                 .font(.body)

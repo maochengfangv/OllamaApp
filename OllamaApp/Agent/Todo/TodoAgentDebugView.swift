@@ -19,6 +19,7 @@ final class TodoAgentDebugViewModel: ObservableObject {
     @Published var lines: [Line] = []
     @Published var isRunning: Bool = false
     @Published var todos: [TodoItem] = []
+    @Published var streamingText: String = ""
 
     private let agent = TodoAgent()
 
@@ -35,9 +36,13 @@ final class TodoAgentDebugViewModel: ObservableObject {
         }
 
         do {
-            let reply = try await agent.send(text)
+            let reply = try await agent.send(text) { [weak self] piece in
+                MainActor.assumeIsolated { self?.streamingText += piece }
+            }
+            streamingText = ""
             lines.append(Line(role: "agent", text: reply))
         } catch {
+            streamingText = ""
             lines.append(Line(role: "error", text: error.localizedDescription))
         }
     }
@@ -92,7 +97,8 @@ struct TodoAgentDebugView: View {
     }
 
     private var conversation: some View {
-        ScrollView {
+        ScrollViewReader { proxy in
+            ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if viewModel.lines.isEmpty {
                     Text("试试：「帮我记一下明天交周报，然后列出所有待办」")
@@ -114,12 +120,38 @@ struct TodoAgentDebugView: View {
                     .cornerRadius(10)
                 }
 
+                if !viewModel.streamingText.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(label(for: "agent"))
+                            .font(.caption)
+                            .foregroundColor(color(for: "agent"))
+                        Text(viewModel.streamingText)
+                            .font(.body)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(color(for: "agent").opacity(0.08))
+                    .cornerRadius(10)
+                }
+
                 if !viewModel.todos.isEmpty {
                     todoPreview
                 }
+
+                Color.clear
+                    .frame(height: 1)
+                    .id("bottom")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
+        }
+            .onChange(of: viewModel.lines.count) {
+                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+            .onChange(of: viewModel.streamingText) {
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
         }
     }
 

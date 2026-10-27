@@ -35,7 +35,7 @@ final class TodoAgent {
      """
     func reset() { history = [] }
     
-    func send(_ userInput: String) async throws -> String {
+    func send(_ userInput: String, onDelta: ((String) -> Void)? = nil) async throws -> String {
         
         let trimmd = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmd.isEmpty else { return "" }
@@ -43,7 +43,7 @@ final class TodoAgent {
         history.append(["role":"user","content": trimmd])
         
         for _ in 0..<maxSteps {
-            let message = try await requestCompletion()
+            let message = try await requestCompletion(onDelta: onDelta)
             
             if let toolCalls = message["tool_calls"] as? [[String:Any]], !toolCalls.isEmpty {
                 var assistantMessage: [String: Any] = ["role": "assistant"]
@@ -73,7 +73,7 @@ final class TodoAgent {
         throw AgentError.maxStepsReached
     }
     
-    private func requestCompletion() async throws -> [String: Any] {
+    private func requestCompletion(onDelta: ((String) -> Void)?) async throws -> [String: Any] {
         let service = Bundle.main.bundleIdentifier ?? "OllamaApp"
         guard let apiKey = KeychainStore.shared.get(service: service, account: "deepseek_api_key"),
               !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -91,23 +91,69 @@ final class TodoAgent {
             "tools": tools,
             "tool_choice": "auto",
             "thinking": ["type": "disabled"],
-            "stream": false
+            "stream": true
         ]
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 60
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let detail = String(data: data, encoding: .utf8) ?? "未知错误"
-            throw AgentError.http(detail)
+            throw AgentError.http("请求失败：\((response as? HTTPURLResponse)?.statusCode ?? -1)")
         }
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-        let choices = json["choices"] as? [[String: Any]] ?? []
-        return choices.first?["message"] as? [String: Any] ?? [:]
+
+        var content = ""
+        var toolCalls: [Int: [String: Any]] = [:]
+
+        for try await line in bytes.lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.hasPrefix("data:") else { continue }
+            let payload = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if payload == "[DONE]" { break }
+            guard let data = payload.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let delta = (json["choices"] as? [[String: Any]])?.first?["delta"] as? [String: Any] else { continue }
+
+            if let piece = delta["content"] as? String, !piece.isEmpty {
+                content += piece
+                onDelta?(piece)
+            }
+
+            if let calls = delta["tool_calls"] as? [[String: Any]] {
+                for call in calls {
+                    let index = call["index"] as? Int ?? 0
+                    var merged = toolCalls[index] ?? ["id": "", "name": "", "arguments": ""]
+                    if let id = call["id"] as? String, !id.isEmpty { merged["id"] = id }
+                    if let function = call["function"] as? [String: Any] {
+                        if let name = function["name"] as? String, !name.isEmpty { merged["name"] = name }
+                        if let arguments = function["arguments"] as? String {
+                            merged["arguments"] = ((merged["arguments"] as? String) ?? "") + arguments
+                        }
+                    }
+                    toolCalls[index] = merged
+                }
+            }
+        }
+
+        var message: [String: Any] = ["content": content]
+        if !toolCalls.isEmpty {
+            message["tool_calls"] = toolCalls.keys.sorted().map { index -> [String: Any] in
+                let merged = toolCalls[index] ?? [:]
+                return [
+                    "id": merged["id"] as? String ?? "",
+                    "type": "function",
+                    "function": [
+                        "name": merged["name"] as? String ?? "",
+                        "arguments": merged["arguments"] as? String ?? "{}"
+                    ]
+                ]
+            }
+        }
+        return message
     }
     
 }

@@ -9,6 +9,18 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         struct Message: Encodable {
             let role: String
             let content: String
+            var tool_call_id: String? = nil
+            var tool_calls: [ToolCall]? = nil
+        }
+
+        struct ToolCall: Encodable {
+            struct Function: Encodable {
+                let name: String
+                let arguments: String
+            }
+            let id: String
+            let type: String
+            let function: Function
         }
 
         struct Thinking: Encodable {
@@ -22,10 +34,21 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         let stream: Bool
     }
 
+    private struct DeepSeekToolCallDTO: Decodable {
+        struct Function: Decodable {
+            let name: String?
+            let arguments: String?
+        }
+        let index: Int?
+        let id: String?
+        let function: Function?
+    }
+
     private struct DeepSeekChatCompletionResponse: Decodable {
         struct Choice: Decodable {
             struct Message: Decodable {
                 let content: String?
+                let tool_calls: [DeepSeekToolCallDTO]?
             }
 
             let message: Message
@@ -38,6 +61,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         struct Choice: Decodable {
             struct Delta: Decodable {
                 let content: String?
+                let tool_calls: [DeepSeekToolCallDTO]?
             }
 
             let delta: Delta?
@@ -71,19 +95,45 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
             case .user:
                 return .init(role: "user", content: message.content)
             case .assistant:
-                guard !message.content.isEmpty else { return nil }
-                return .init(role: "assistant", content: message.content)
+                let calls = message.toolCalls?.map {
+                    DeepSeekChatCompletionRequest.ToolCall(
+                        id: $0.id,
+                        type: "function",
+                        function: .init(name: $0.name, arguments: $0.argumentsJSON)
+                    )
+                }
+                guard !message.content.isEmpty || !(calls?.isEmpty ?? true) else { return nil }
+                return .init(role: "assistant", content: message.content, tool_calls: calls)
+            case .tool:
+                return .init(role: "tool", content: message.content, tool_call_id: message.toolCallID)
             }
         })
+
+        let encodedTools: [[String: Any]]? = request.tools.isEmpty ? nil : request.tools.map { tool in
+            [
+                "type": "function",
+                "function": [
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": (try? JSONSerialization.jsonObject(with: Data(tool.parametersJSONSchema.utf8))) ?? [:]
+                ]
+            ]
+        }
 
         let body = DeepSeekChatCompletionRequest(
             model: request.model,
             messages: messages,
-            thinking: .init(type: "enabled"),
-            reasoning_effort: "high",
+            thinking: request.tools.isEmpty ? .init(type: "enabled") : .init(type: "disabled"),
+            reasoning_effort: request.tools.isEmpty ? "high" : nil,
             stream: true
         )
-        let encodedBody = try JSONEncoder().encode(body)
+        var encodedBody = try JSONEncoder().encode(body)
+        if let encodedTools,
+           var json = try JSONSerialization.jsonObject(with: encodedBody) as? [String: Any] {
+            json["tools"] = encodedTools
+            json["tool_choice"] = "auto"
+            encodedBody = try JSONSerialization.data(withJSONObject: json)
+        }
 
         return AsyncThrowingStream { continuation in
             let worker = Task {
@@ -158,6 +208,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         continuation: AsyncThrowingStream<AIProviderChunk, Error>.Continuation
     ) async throws where Lines.Element == String {
         var hasYieldedAnswerPrefix = false
+        var toolCallAccumulator: [Int: (id: String, name: String, arguments: String)] = [:]
 
         for try await line in lines {
             if Task.isCancelled {
@@ -169,21 +220,41 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
 
             let payload = String(trimmed.dropFirst(5)).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             if payload == "[DONE]" {
-                return
+                break
             }
 
             guard let data = payload.data(using: String.Encoding.utf8),
                   let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionStreamResponse.self, from: data),
-                  let content = decoded.choices.first?.delta?.content,
-                  !content.isEmpty else {
+                  let delta = decoded.choices.first?.delta else {
                 continue
             }
+
+            if let calls = delta.tool_calls {
+                for call in calls {
+                    let index = call.index ?? 0
+                    var merged = toolCallAccumulator[index] ?? ("", "", "")
+                    if let id = call.id, !id.isEmpty { merged.id = id }
+                    if let name = call.function?.name, !name.isEmpty { merged.name = name }
+                    if let arguments = call.function?.arguments { merged.arguments += arguments }
+                    toolCallAccumulator[index] = merged
+                }
+            }
+
+            guard let content = delta.content, !content.isEmpty else { continue }
 
             if !hasYieldedAnswerPrefix, previewText != nil {
                 continuation.yield(.delta("\n\n【回答】\n"))
                 hasYieldedAnswerPrefix = true
             }
             continuation.yield(.delta(content))
+        }
+
+        if !toolCallAccumulator.isEmpty {
+            let calls = toolCallAccumulator.keys.sorted().map { index in
+                let merged = toolCallAccumulator[index]!
+                return AIToolCall(id: merged.id, name: merged.name, argumentsJSON: merged.arguments.isEmpty ? "{}" : merged.arguments)
+            }
+            continuation.yield(.toolCalls(calls))
         }
     }
 
@@ -192,13 +263,25 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         previewText: String?,
         continuation: AsyncThrowingStream<AIProviderChunk, Error>.Continuation
     ) throws {
-        guard let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionResponse.self, from: data),
-              let content = decoded.choices.first?.message.content else {
+        guard let decoded = try? JSONDecoder().decode(DeepSeekChatCompletionResponse.self, from: data) else {
             throw LLMProviderError.decodingFailed("DeepSeek 响应解析失败")
         }
 
         let prefix = previewText == nil ? "" : "\n\n【回答】\n"
-        continuation.yield(.delta(prefix + content))
+        if let content = decoded.choices.first?.message.content, !content.isEmpty {
+            continuation.yield(.delta(prefix + content))
+        }
+
+        if let rawCalls = decoded.choices.first?.message.tool_calls, !rawCalls.isEmpty {
+            let calls = rawCalls.enumerated().map { index, call in
+                AIToolCall(
+                    id: call.id ?? "call_\(index)",
+                    name: call.function?.name ?? "",
+                    argumentsJSON: call.function?.arguments ?? "{}"
+                )
+            }
+            continuation.yield(.toolCalls(calls))
+        }
     }
 
     private func collectData(from bytes: URLSession.AsyncBytes) async throws -> Data {

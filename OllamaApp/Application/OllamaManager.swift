@@ -193,6 +193,8 @@ class OllamaManager: ObservableObject {
                     latestUsage = usage
                     latestDebugSnapshot?.usage = usage
                     latestDebugSnapshot?.updatedAt = Date()
+                case .toolCalls:
+                    break
                 case .completed(let completion):
                     latestUsage = completion.usage
                     apply(completion: completion)
@@ -228,7 +230,7 @@ class OllamaManager: ObservableObject {
             }
         case .delta(let text):
             messages[lastIndex].content += text
-        case .started, .usage, .completed, .failed, .cancelled:
+        case .started, .usage, .toolCalls, .completed, .failed, .cancelled:
             break
         }
     }

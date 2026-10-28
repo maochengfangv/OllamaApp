@@ -18,7 +18,23 @@ static let toolsJSON = #"""
       {"type":"function","function":{"name":"delete_todo","description":"删除某条待办","parameters":{"type":"object","properties":{"key":{"type":"string","description":"待办标题关键字或 id"}},"required":["key"]}}}
     ]
     """#
-    
+
+    static var tools: [AIToolDefinition] {
+        guard let data = toolsJSON.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+        return array.compactMap { item in
+            guard let function = item["function"] as? [String: Any],
+                  let name = function["name"] as? String,
+                  let description = function["description"] as? String,
+                  let parameters = function["parameters"],
+                  let paramData = try? JSONSerialization.data(withJSONObject: parameters),
+                  let paramString = String(data: paramData, encoding: .utf8) else { return nil }
+            return AIToolDefinition(name: name, description: description, parametersJSONSchema: paramString)
+        }
+    }
+
     static func run(name: String, argumentsJSON: String) -> String {
         let args = (try? JSONSerialization.jsonObject(with: Data(argumentsJSON.utf8))) as? [String: Any] ?? [:]
         switch name {

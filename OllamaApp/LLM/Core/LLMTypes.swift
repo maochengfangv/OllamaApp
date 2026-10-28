@@ -17,15 +17,37 @@ struct ChatSession: Identifiable, Codable, Equatable {
     var date: Date
 }
 
+struct AIToolDefinition: Equatable {
+    let name: String
+    let description: String
+    let parametersJSONSchema: String
+}
+
+struct AIToolCall: Codable, Equatable {
+    let id: String
+    let name: String
+    let argumentsJSON: String
+}
+
 enum AIMessageRole: String, Codable, Equatable {
     case system
     case user
     case assistant
+    case tool
 }
 
 struct AIMessage: Codable, Equatable {
     let role: AIMessageRole
     let content: String
+    let toolCallID: String?
+    let toolCalls: [AIToolCall]?
+
+    init(role: AIMessageRole, content: String, toolCallID: String? = nil, toolCalls: [AIToolCall]? = nil) {
+        self.role = role
+        self.content = content
+        self.toolCallID = toolCallID
+        self.toolCalls = toolCalls
+    }
 }
 
 enum AICapability: String, Codable, Equatable, CaseIterable {
@@ -180,6 +202,7 @@ struct AIRequest: Equatable {
     let contextOptions: AIContextOptions
     let retryPolicy: AIRetryPolicy
     let metadata: [String: String]
+    let tools: [AIToolDefinition]
 
     init(
         requestID: UUID = UUID(),
@@ -198,7 +221,8 @@ struct AIRequest: Equatable {
         timeoutInterval: TimeInterval = 60,
         contextOptions: AIContextOptions = .disabled,
         retryPolicy: AIRetryPolicy = .default,
-        metadata: [String: String] = [:]
+        metadata: [String: String] = [:],
+        tools: [AIToolDefinition] = []
     ) {
         self.requestID = requestID
         self.sessionID = sessionID
@@ -217,6 +241,7 @@ struct AIRequest: Equatable {
         self.contextOptions = contextOptions
         self.retryPolicy = retryPolicy
         self.metadata = metadata
+        self.tools = tools
     }
 
     var latestUserMessage: String? {
@@ -336,6 +361,7 @@ enum AIResponseEvent: Equatable {
     case preview(String)
     case delta(String)
     case usage(AIUsage)
+    case toolCalls([AIToolCall])
     case completed(AIResponseCompletion)
     case failed(AIClientError)
     case cancelled(AIResponseCancellation)
@@ -345,6 +371,7 @@ enum AIProviderChunk: Equatable {
     case preview(String)
     case delta(String)
     case usage(AIUsage)
+    case toolCalls([AIToolCall])
 }
 
 extension ChatMessage.MessageRole {

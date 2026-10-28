@@ -127,6 +127,8 @@ final class AIClient: AIClienting {
                                 case .usage(let chunkUsage):
                                     usage = chunkUsage
                                     continuation.yield(.usage(chunkUsage))
+                                case .toolCalls(let calls):
+                                    continuation.yield(.toolCalls(calls))
                                 }
                             }
 
@@ -298,7 +300,7 @@ private extension AIProviderChunk {
         switch self {
         case .preview, .delta:
             return true
-        case .usage:
+        case .usage, .toolCalls:
             return false
         }
     }

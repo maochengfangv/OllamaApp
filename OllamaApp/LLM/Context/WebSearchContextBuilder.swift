@@ -69,6 +69,12 @@ struct WebSearchContextBuilder: LLMContextBuilding {
         let current: Current?
     }
 
+    private func fetchWithTimeout(_ url: URL) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = networkTimeout
+        return try await URLSession.shared.data(for: request)
+    }
+
     private func fetchDuckDuckGoContext(query: String) async throws -> String? {
         var components = URLComponents(string: "https://api.duckduckgo.com/")!
         components.queryItems = [
@@ -151,7 +157,7 @@ struct WebSearchContextBuilder: LLMContextBuilding {
         ]
 
         guard let geocodeURL = geocode.url else { return nil }
-        let (geocodeData, geocodeResponse) = try await URLSession.shared.data(from: geocodeURL)
+        let (geocodeData, geocodeResponse) = try await fetchWithTimeout(geocodeURL)
         guard let geocodeHTTP = geocodeResponse as? HTTPURLResponse, geocodeHTTP.statusCode == 200 else { return nil }
 
         let geocodeDecoded = try JSONDecoder().decode(OpenMeteoGeocodingResponse.self, from: geocodeData)
@@ -166,7 +172,7 @@ struct WebSearchContextBuilder: LLMContextBuilding {
         ]
 
         guard let forecastURL = forecast.url else { return nil }
-        let (forecastData, forecastResponse) = try await URLSession.shared.data(from: forecastURL)
+        let (forecastData, forecastResponse) = try await fetchWithTimeout(forecastURL)
         guard let forecastHTTP = forecastResponse as? HTTPURLResponse, forecastHTTP.statusCode == 200 else { return nil }
 
         let forecastDecoded = try JSONDecoder().decode(OpenMeteoForecastResponse.self, from: forecastData)

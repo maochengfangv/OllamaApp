@@ -240,13 +240,8 @@ struct TodoAgentDebugView: View {
 
     @ViewBuilder
     private func lineText(for line: TodoAgentDebugViewModel.Line) -> some View {
-        if line.role == "agent",
-           let attributed = try? AttributedString(
-               markdown: line.text,
-               options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-           ) {
-            Text(attributed)
-                .font(.body)
+        if line.role == "agent" {
+            MarkdownBlockView(text: line.text, foreground: .primary)
                 .textSelection(.enabled)
         } else {
             Text(line.text)

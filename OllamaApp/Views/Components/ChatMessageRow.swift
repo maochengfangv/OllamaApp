@@ -68,12 +68,8 @@ struct ChatMessageRow: View {
             Text(message.content)
                 .foregroundColor(foreground)
                 .textSelection(.enabled)
-        } else if let attributed = try? AttributedString(
-            markdown: message.content,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        ) {
-            Text(attributed)
-                .foregroundColor(foreground)
+        } else if message.role == .model {
+            MarkdownBlockView(text: message.content, foreground: foreground)
                 .textSelection(.enabled)
         } else {
             Text(message.content)

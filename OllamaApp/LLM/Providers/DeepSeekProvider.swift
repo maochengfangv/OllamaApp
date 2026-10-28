@@ -48,6 +48,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         struct Choice: Decodable {
             struct Message: Decodable {
                 let content: String?
+                let reasoning_content: String?
                 let tool_calls: [DeepSeekToolCallDTO]?
             }
 
@@ -61,6 +62,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         struct Choice: Decodable {
             struct Delta: Decodable {
                 let content: String?
+                let reasoning_content: String?
                 let tool_calls: [DeepSeekToolCallDTO]?
             }
 
@@ -240,6 +242,10 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                 }
             }
 
+            if let reasoning = delta.reasoning_content, !reasoning.isEmpty {
+                continuation.yield(.reasoning(reasoning))
+            }
+
             guard let content = delta.content, !content.isEmpty else { continue }
 
             if !hasYieldedAnswerPrefix, previewText != nil {
@@ -268,6 +274,9 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         }
 
         let prefix = previewText == nil ? "" : "\n\n【回答】\n"
+        if let reasoning = decoded.choices.first?.message.reasoning_content, !reasoning.isEmpty {
+            continuation.yield(.reasoning(reasoning))
+        }
         if let content = decoded.choices.first?.message.content, !content.isEmpty {
             continuation.yield(.delta(prefix + content))
         }

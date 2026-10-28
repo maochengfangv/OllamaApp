@@ -129,6 +129,9 @@ final class AIClient: AIClienting {
                                     continuation.yield(.usage(chunkUsage))
                                 case .toolCalls(let calls):
                                     continuation.yield(.toolCalls(calls))
+                                case .reasoning(let text):
+                                    outputCharacters += text.count
+                                    continuation.yield(.reasoning(text))
                                 }
                             }
 
@@ -298,7 +301,7 @@ final class AIClient: AIClienting {
 private extension AIProviderChunk {
     var isContentBearing: Bool {
         switch self {
-        case .preview, .delta:
+        case .preview, .delta, .reasoning:
             return true
         case .usage, .toolCalls:
             return false

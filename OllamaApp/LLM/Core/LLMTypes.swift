@@ -4,6 +4,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     var id = UUID()
     let role: MessageRole
     var content: String
+    var reasoningContent: String? = nil
 
     enum MessageRole: String, Codable {
         case user, model
@@ -361,6 +362,7 @@ enum AIResponseEvent: Equatable {
     case preview(String)
     case delta(String)
     case usage(AIUsage)
+    case reasoning(String)
     case toolCalls([AIToolCall])
     case completed(AIResponseCompletion)
     case failed(AIClientError)
@@ -370,6 +372,7 @@ enum AIResponseEvent: Equatable {
 enum AIProviderChunk: Equatable {
     case preview(String)
     case delta(String)
+    case reasoning(String)
     case usage(AIUsage)
     case toolCalls([AIToolCall])
 }

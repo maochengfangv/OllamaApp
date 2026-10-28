@@ -187,7 +187,7 @@ class OllamaManager: ObservableObject {
                 switch event {
                 case .started:
                     break
-                case .preview, .delta:
+                case .preview, .delta, .reasoning:
                     apply(event)
                 case .usage(let usage):
                     latestUsage = usage
@@ -230,6 +230,9 @@ class OllamaManager: ObservableObject {
             }
         case .delta(let text):
             messages[lastIndex].content += text
+        case .reasoning(let text):
+            let existing = messages[lastIndex].reasoningContent ?? ""
+            messages[lastIndex].reasoningContent = existing + text
         case .started, .usage, .toolCalls, .completed, .failed, .cancelled:
             break
         }

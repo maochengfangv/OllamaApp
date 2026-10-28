@@ -11,7 +11,7 @@ final class AIClient: AIClienting {
 
     init(
         providerFactory: @escaping (LLMProvider) -> any LLMGeneratingProvider = LLMProviderFactory.makeProvider(for:),
-        contextBuilder: any LLMContextBuilding = WebSearchContextBuilder(),
+        contextBuilder: any LLMContextBuilding = MemoryContextBuilder(),
         telemetry: any ChatTelemetryRecording = ChatTelemetryRecorder.shared
     ) {
         self.providerFactory = providerFactory
@@ -81,6 +81,10 @@ final class AIClient: AIClienting {
                         continuation: continuation
                     )
                     return
+                }
+                
+                if let memoryInfo = context.memoryInfo {
+                    continuation.yield(.memoryContext(memoryInfo))
                 }
 
                 for (routeIndex, route) in routes.enumerated() {

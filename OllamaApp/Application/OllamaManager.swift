@@ -196,6 +196,10 @@ class OllamaManager: ObservableObject {
                     latestDebugSnapshot?.updatedAt = Date()
                 case .toolCalls:
                     break
+                case .memoryContext(let info):
+                    latestDebugSnapshot?.memoryHitCount = info.hitCount
+                    latestDebugSnapshot?.memoryPreview = info.preview
+                    latestDebugSnapshot?.updatedAt = Date()
                 case .completed(let completion):
                     latestUsage = completion.usage
                     apply(completion: completion)
@@ -234,7 +238,7 @@ class OllamaManager: ObservableObject {
         case .reasoning(let text):
             let existing = messages[lastIndex].reasoningContent ?? ""
             messages[lastIndex].reasoningContent = existing + text
-        case .started, .usage, .toolCalls, .completed, .failed, .cancelled:
+        case .started, .usage, .toolCalls, .memoryContext, .completed, .failed, .cancelled:
             break
         }
     }
@@ -254,6 +258,9 @@ class OllamaManager: ObservableObject {
 
         switch outcome {
         case .completed:
+            if isActiveGeneration, let userText = request.latestUserMessage, !userText.isEmpty {
+                Task { await MemoryService.shared.remember(text: userText) }
+            }
             return
         case .cancelled(let cancellation):
             if cancellation == nil {
@@ -311,7 +318,7 @@ class OllamaManager: ObservableObject {
             outputFormat: promptConfiguration.outputFormat,
             promptVariables: promptConfiguration.variables,
             timeoutInterval: 60,
-            contextOptions: AIContextOptions(webEnabled: webEnabled),
+            contextOptions: AIContextOptions(webEnabled: webEnabled, memoryEnabled: true),
             retryPolicy: .default,
             metadata: [
                 "entryProvider": provider.rawValue,

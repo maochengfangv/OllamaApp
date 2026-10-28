@@ -31,5 +31,7 @@ struct AIDebugSnapshot: Equatable {
     var usage: AIUsage?
     var errorCode: AIClientErrorCode?
     var errorMessage: String?
+    var memoryHitCount: Int? = nil
+    var memoryPreview: String? = nil
     var updatedAt: Date
 }

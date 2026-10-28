@@ -55,6 +55,7 @@ enum AICapability: String, Codable, Equatable, CaseIterable {
     case streaming
     case webSearch
     case reasoning
+    case embedding
 }
 
 struct AIProviderCapabilities: Equatable {
@@ -174,8 +175,38 @@ private func compactUniqueProviders(_ providers: [LLMProvider?]) -> [LLMProvider
 
 struct AIContextOptions: Codable, Equatable {
     let webEnabled: Bool
+    let memoryEnabled: Bool
+    init(webEnabled: Bool, memoryEnabled: Bool) {
+        self.webEnabled = webEnabled
+        self.memoryEnabled = memoryEnabled
+    }
+    static let disabled = AIContextOptions(webEnabled: false, memoryEnabled: false)
+}
 
-    static let disabled = AIContextOptions(webEnabled: false)
+struct AIEmbeddingRequest: Equatable {
+    let requestID: UUID
+    let provider: LLMProvider
+    let model: String
+    let inputs: [String]
+    let timeoutInterval: TimeInterval
+    init(requestID: UUID = UUID(), provider: LLMProvider = .deepseek, model: String, inputs: [String], timeoutInterval: TimeInterval = 8) {
+        self.requestID = requestID
+        self.provider = provider
+        self.model = model
+        self.inputs = inputs
+        self.timeoutInterval = timeoutInterval
+    }
+}
+
+struct AIEmbeddingResponse: Equatable {
+    let embeddings: [[Float]]
+    let model: String
+    let requestID: UUID
+}
+
+struct AIMemoryContextInfo: Equatable {
+    let hitCount: Int
+    let preview: String
 }
 
 struct AIRetryPolicy: Codable, Equatable {
@@ -364,6 +395,7 @@ enum AIResponseEvent: Equatable {
     case usage(AIUsage)
     case reasoning(String)
     case toolCalls([AIToolCall])
+    case memoryContext(AIMemoryContextInfo)
     case completed(AIResponseCompletion)
     case failed(AIClientError)
     case cancelled(AIResponseCancellation)

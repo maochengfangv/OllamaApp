@@ -51,6 +51,16 @@ struct AIDebugPanelView: View {
                             keyValueRow("Estimated Cost", formatCurrency(usage.estimatedCost))
                         }
                     }
+                    
+
+                    if let memoryHitCount = snapshot.memoryHitCount {
+                        Section("Memory (RAG)") {
+                            keyValueRow("Recalled Items", "\(memoryHitCount)")
+                            if let preview = snapshot.memoryPreview, !preview.isEmpty {
+                                keyValueRow("Preview", preview)
+                            }
+                        }
+                    }
 
                     if snapshot.status == .failed || snapshot.errorMessage != nil {
                         Section("Error") {

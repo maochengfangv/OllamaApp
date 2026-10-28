@@ -184,6 +184,7 @@ class OllamaManager: ObservableObject {
             var outcome: GenerationOutcome = .completed(nil)
             let stream = aiClient.responseStream(for: request)
             for await event in stream {
+                if Task.isCancelled { break }
                 switch event {
                 case .started:
                     break

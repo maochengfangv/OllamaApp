@@ -318,7 +318,7 @@ class OllamaManager: ObservableObject {
             outputFormat: promptConfiguration.outputFormat,
             promptVariables: promptConfiguration.variables,
             timeoutInterval: 60,
-            contextOptions: AIContextOptions(webEnabled: webEnabled, memoryEnabled: true),
+            contextOptions: AIContextOptions(webEnabled: webEnabled, memoryEnabled: AIMemorySettings.isEnabled),
             retryPolicy: .default,
             metadata: [
                 "entryProvider": provider.rawValue,

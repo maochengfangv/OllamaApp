@@ -2,21 +2,54 @@ import Foundation
 
 protocol AIClienting {
     func responseStream(for request: AIRequest) -> AsyncStream<AIResponseEvent>
+    func embeddings(for request: AIEmbeddingRequest) async throws -> AIEmbeddingResponse
 }
 
 final class AIClient: AIClienting {
+    static let shared = AIClient()
+
     private let providerFactory: (LLMProvider) -> any LLMGeneratingProvider
     private let contextBuilder: any LLMContextBuilding
     private let telemetry: any ChatTelemetryRecording
+    private let embeddingProvider: any LLMEmbeddingProviding
 
     init(
         providerFactory: @escaping (LLMProvider) -> any LLMGeneratingProvider = LLMProviderFactory.makeProvider(for:),
         contextBuilder: any LLMContextBuilding = MemoryContextBuilder(),
-        telemetry: any ChatTelemetryRecording = ChatTelemetryRecorder.shared
+        telemetry: any ChatTelemetryRecording = ChatTelemetryRecorder.shared,
+        embeddingProvider: any LLMEmbeddingProviding = OpenAICompatibleEmbeddingProvider()
     ) {
         self.providerFactory = providerFactory
         self.contextBuilder = contextBuilder
         self.telemetry = telemetry
+        self.embeddingProvider = embeddingProvider
+    }
+
+    func embeddings(for request: AIEmbeddingRequest) async throws -> AIEmbeddingResponse {
+        let startDate = Date()
+        do {
+            let response = try await embeddingProvider.embeddings(for: request)
+            telemetry.record(.embeddingCompleted(
+                requestID: request.requestID,
+                provider: request.provider,
+                model: request.model,
+                durationMs: max(Int(Date().timeIntervalSince(startDate) * 1000), 0),
+                inputCount: request.inputs.count,
+                dimensions: response.embeddings.first?.count ?? 0
+            ))
+            return response
+        } catch {
+            let normalized = AIClientError.normalize(error, provider: request.provider)
+            telemetry.record(.embeddingFailed(
+                requestID: request.requestID,
+                provider: request.provider,
+                model: request.model,
+                durationMs: max(Int(Date().timeIntervalSince(startDate) * 1000), 0),
+                errorCode: normalized.code,
+                message: normalized.message
+            ))
+            throw normalized
+        }
     }
 
     func responseStream(for request: AIRequest) -> AsyncStream<AIResponseEvent> {

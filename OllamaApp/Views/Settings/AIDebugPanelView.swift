@@ -3,7 +3,9 @@ import SwiftUI
 struct AIDebugPanelView: View {
     let provider: LLMProvider
     @ObservedObject var manager: OllamaManager
+    var memory: any MemoryServicing = MemoryService.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var memoryItems: [MemoryItem] = []
 
     var body: some View {
         NavigationStack {
@@ -13,6 +15,35 @@ struct AIDebugPanelView: View {
                     keyValueRow("Generating", manager.isGenerating ? "Yes" : "No")
                     keyValueRow("Current Session", manager.currentSessionId ?? "None")
                     keyValueRow("Message Count", "\(manager.messages.count)")
+                }
+
+                Section("Memory Store (RAG)") {
+                    keyValueRow("Enabled", AIMemorySettings.isEnabled ? "Yes" : "No")
+                    keyValueRow("Embedding Model", AIEmbeddingModel.configured)
+                    keyValueRow("Total Items", "\(memoryItems.count)")
+
+                    if memoryItems.isEmpty {
+                        Text("No memories stored yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(memoryItems) { item in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.text)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                Text(item.createdAt.formatted(date: .abbreviated, time: .standard))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
+                    Button("清空记忆库", role: .destructive) {
+                        memory.clearMemories()
+                        reloadMemoryItems()
+                    }
+                    .disabled(memoryItems.isEmpty)
                 }
 
                 if let snapshot = manager.latestDebugSnapshot {
@@ -77,6 +108,9 @@ struct AIDebugPanelView: View {
             }
             .navigationTitle("AI Debug")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                reloadMemoryItems()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
@@ -112,5 +146,9 @@ struct AIDebugPanelView: View {
     private func formatCurrency(_ value: Double?) -> String {
         guard let value else { return "N/A" }
         return String(format: "$%.6f", value)
+    }
+
+    private func reloadMemoryItems() {
+        memoryItems = memory.items().sorted { $0.createdAt > $1.createdAt }
     }
 }

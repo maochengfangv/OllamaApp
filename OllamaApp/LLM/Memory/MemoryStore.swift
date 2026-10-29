@@ -12,6 +12,7 @@ protocol MemoryStoring: AnyObject {
     func recall(embedding: [Float], topK: Int, minSimilarity: Float) -> [MemoryMatch]
     func remember(text: String, embedding:[Float], metadata: [String: String])
     func makeContextString(matches: [MemoryMatch]) -> String?
+    func allItems() -> [MemoryItem]
     func count() -> Int
     func clear()
 }
@@ -57,7 +58,7 @@ final class MemoryStore: MemoryStoring {
     
     func remember(text: String, embedding:[Float], metadata: [String: String]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !embedding.isEmpty else { return }
         lock.lock()
         items.append(MemoryItem(text: trimmed, embedding: embedding, metadata: metadata))
         if items.count > maxItems {
@@ -81,6 +82,12 @@ final class MemoryStore: MemoryStoring {
         lock.lock()
         defer { lock.unlock() }
         return items.count
+    }
+
+    func allItems() -> [MemoryItem] {
+        lock.lock()
+        defer { lock.unlock() }
+        return items
     }
     
     func clear() {

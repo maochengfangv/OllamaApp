@@ -48,6 +48,22 @@ enum ChatTelemetryEvent: Equatable {
     case sessionLoaded(provider: LLMProvider, sessionId: String, messageCount: Int)
     case sessionDeleted(provider: LLMProvider, sessionId: String)
     case legacyHistoryMigrated(provider: LLMProvider, sessionCount: Int)
+    case embeddingCompleted(
+        requestID: UUID,
+        provider: LLMProvider,
+        model: String,
+        durationMs: Int,
+        inputCount: Int,
+        dimensions: Int
+    )
+    case embeddingFailed(
+        requestID: UUID,
+        provider: LLMProvider,
+        model: String,
+        durationMs: Int,
+        errorCode: AIClientErrorCode,
+        message: String
+    )
 
     var name: String {
         switch self {
@@ -58,6 +74,8 @@ enum ChatTelemetryEvent: Equatable {
         case .sessionLoaded: return "session_loaded"
         case .sessionDeleted: return "session_deleted"
         case .legacyHistoryMigrated: return "legacy_history_migrated"
+        case .embeddingCompleted: return "embedding_completed"
+        case .embeddingFailed: return "embedding_failed"
         }
     }
 
@@ -77,6 +95,10 @@ enum ChatTelemetryEvent: Equatable {
             return "provider=\(provider.rawValue) sessionId=\(sessionId)"
         case .legacyHistoryMigrated(let provider, let sessionCount):
             return "provider=\(provider.rawValue) sessionCount=\(sessionCount)"
+        case .embeddingCompleted(let requestID, let provider, let model, let durationMs, let inputCount, let dimensions):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) inputCount=\(inputCount) dimensions=\(dimensions)"
+        case .embeddingFailed(let requestID, let provider, let model, let durationMs, let errorCode, let message):
+            return "requestID=\(requestID.uuidString) provider=\(provider.rawValue) model=\(model) durationMs=\(durationMs) errorCode=\(errorCode.rawValue) error=\(message)"
         }
     }
 }

@@ -176,7 +176,7 @@ private func compactUniqueProviders(_ providers: [LLMProvider?]) -> [LLMProvider
 struct AIContextOptions: Codable, Equatable {
     let webEnabled: Bool
     let memoryEnabled: Bool
-    init(webEnabled: Bool, memoryEnabled: Bool) {
+    init(webEnabled: Bool, memoryEnabled: Bool = false) {
         self.webEnabled = webEnabled
         self.memoryEnabled = memoryEnabled
     }

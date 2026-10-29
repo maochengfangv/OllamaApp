@@ -8,6 +8,29 @@
 
 import Foundation
 
+enum TodoToolRiskLevel {
+    case low
+    case high
+}
+
+struct TodoPendingToolAction: Equatable {
+    let toolCallID: String
+    let name: String
+    let argumentsJSON: String
+    let title: String
+}
+
+struct TodoToolDescriptor: Equatable {
+    let name: String
+    let description: String
+    let parametersJSONSchema: String
+    let riskLevel: TodoToolRiskLevel
+
+    var requiresConfirmation: Bool {
+        riskLevel == .high
+    }
+}
+
 enum TodoToolRunner {
 
 static let toolsJSON = #"""
@@ -19,7 +42,7 @@ static let toolsJSON = #"""
     ]
     """#
 
-    static var tools: [AIToolDefinition] {
+    static var descriptors: [TodoToolDescriptor] {
         guard let data = toolsJSON.data(using: .utf8),
               let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             return []
@@ -31,8 +54,28 @@ static let toolsJSON = #"""
                   let parameters = function["parameters"],
                   let paramData = try? JSONSerialization.data(withJSONObject: parameters),
                   let paramString = String(data: paramData, encoding: .utf8) else { return nil }
-            return AIToolDefinition(name: name, description: description, parametersJSONSchema: paramString)
+            let riskLevel: TodoToolRiskLevel = name == "delete_todo" ? .high : .low
+            return TodoToolDescriptor(name: name, description: description, parametersJSONSchema: paramString, riskLevel: riskLevel)
         }
+    }
+
+    static var tools: [AIToolDefinition] {
+        descriptors.map {
+            AIToolDefinition(name: $0.name, description: $0.description, parametersJSONSchema: $0.parametersJSONSchema)
+        }
+    }
+
+    static func pendingAction(for call: AIToolCall) -> TodoPendingToolAction? {
+        guard let descriptor = descriptors.first(where: { $0.name == call.name }),
+              descriptor.requiresConfirmation else {
+            return nil
+        }
+        return TodoPendingToolAction(
+            toolCallID: call.id,
+            name: call.name,
+            argumentsJSON: call.argumentsJSON,
+            title: actionTitle(name: call.name, argumentsJSON: call.argumentsJSON)
+        )
     }
 
     static func run(name: String, argumentsJSON: String) -> String {
@@ -55,6 +98,17 @@ static let toolsJSON = #"""
             return TodoStore.shared.delete(key: key) ? "已删除：\(key)" : "未能找到匹配的待办：\(key)"
         default:
             return "未知工具\(name)"
+        }
+    }
+
+    private static func actionTitle(name: String, argumentsJSON: String) -> String {
+        let args = (try? JSONSerialization.jsonObject(with: Data(argumentsJSON.utf8))) as? [String: Any] ?? [:]
+        let key = (args["key"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        switch name {
+        case "delete_todo":
+            return key.isEmpty ? "删除待办" : "删除待办「\(key)」"
+        default:
+            return name
         }
     }
 }

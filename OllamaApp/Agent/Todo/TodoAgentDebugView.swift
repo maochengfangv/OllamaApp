@@ -20,6 +20,7 @@ final class TodoAgentDebugViewModel: ObservableObject {
     @Published var isRunning: Bool = false
     @Published var todos: [TodoItem] = []
     @Published var streamingText: String = ""
+    @Published var pendingAction: TodoPendingToolAction?
 
     private let agent = TodoAgent()
 
@@ -36,11 +37,49 @@ final class TodoAgentDebugViewModel: ObservableObject {
         }
 
         do {
-            let reply = try await agent.send(text) { [weak self] piece in
+            let outcome = try await agent.send(text) { [weak self] piece in
                 MainActor.assumeIsolated { self?.streamingText += piece }
             }
+            apply(outcome)
+        } catch {
             streamingText = ""
-            lines.append(Line(role: "agent", text: reply))
+            lines.append(Line(role: "error", text: error.localizedDescription))
+        }
+    }
+
+    func confirmPendingAction() async {
+        guard pendingAction != nil, !isRunning else { return }
+        isRunning = true
+        defer {
+            isRunning = false
+            todos = TodoStore.shared.list()
+        }
+
+        do {
+            let outcome = try await agent.confirmPendingAction { [weak self] piece in
+                MainActor.assumeIsolated { self?.streamingText += piece }
+            }
+            apply(outcome)
+        } catch {
+            streamingText = ""
+            lines.append(Line(role: "error", text: error.localizedDescription))
+        }
+    }
+
+    func rejectPendingAction(showUserMessage: Bool = true) async {
+        guard let pendingAction, !isRunning else { return }
+        isRunning = true
+        defer {
+            isRunning = false
+            todos = TodoStore.shared.list()
+        }
+
+        if showUserMessage {
+            lines.append(Line(role: "agent", text: "已取消：\(pendingAction.title)"))
+        }
+        do {
+            let outcome = try await agent.rejectPendingAction()
+            apply(outcome)
         } catch {
             streamingText = ""
             lines.append(Line(role: "error", text: error.localizedDescription))
@@ -49,8 +88,22 @@ final class TodoAgentDebugViewModel: ObservableObject {
 
     func reset() {
         agent.reset()
+        pendingAction = nil
         lines.removeAll()
         todos = TodoStore.shared.list()
+    }
+
+    private func apply(_ outcome: TodoAgent.SendOutcome) {
+        streamingText = ""
+        pendingAction = agent.pendingAction
+        switch outcome {
+        case .completed(let reply):
+            if !reply.isEmpty {
+                lines.append(Line(role: "agent", text: reply))
+            }
+        case .awaitingConfirmation(let message):
+            lines.append(Line(role: "agent", text: message))
+        }
     }
 
     func toggle(_ todo: TodoItem) {
@@ -72,6 +125,8 @@ struct TodoAgentDebugView: View {
     @StateObject private var viewModel = TodoAgentDebugViewModel()
     @Environment(\.dismiss) private var dismiss
     @State private var pendingDeletion: TodoItem?
+    @State private var agentPendingAction: TodoPendingToolAction?
+    @State private var isShowingAgentConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -92,6 +147,31 @@ struct TodoAgentDebugView: View {
             }
             .task {
                 viewModel.todos = TodoStore.shared.list()
+            }
+            .onChange(of: viewModel.pendingAction?.toolCallID) { _ in
+                agentPendingAction = viewModel.pendingAction
+                isShowingAgentConfirmation = viewModel.pendingAction != nil
+            }
+            .onChange(of: isShowingAgentConfirmation) { isShowing in
+                guard !isShowing,
+                      agentPendingAction != nil,
+                      viewModel.pendingAction != nil else { return }
+                agentPendingAction = nil
+                Task { await viewModel.rejectPendingAction(showUserMessage: false) }
+            }
+            .confirmationDialog(
+                "确认执行「\(agentPendingAction?.title ?? "")」？",
+                isPresented: $isShowingAgentConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("确认", role: .destructive) {
+                    agentPendingAction = nil
+                    Task { await viewModel.confirmPendingAction() }
+                }
+                Button("取消", role: .cancel) {
+                    agentPendingAction = nil
+                    Task { await viewModel.rejectPendingAction() }
+                }
             }
         }
     }
@@ -210,22 +290,30 @@ struct TodoAgentDebugView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
-            TextField("输入待办指令…", text: $viewModel.input, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...4)
-                .disabled(viewModel.isRunning)
-
-            Button {
-                Task { await viewModel.send() }
-            } label: {
-                if viewModel.isRunning {
-                    ProgressView()
-                } else {
-                    Image(systemName: "paperplane.fill")
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            if viewModel.pendingAction != nil {
+                Text("当前有待确认操作，请先在弹窗中选择“确认”或“取消”。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .disabled(viewModel.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isRunning)
+
+            HStack(spacing: 8) {
+                TextField("输入待办指令…", text: $viewModel.input, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                    .disabled(viewModel.isRunning || viewModel.pendingAction != nil)
+
+                Button {
+                    Task { await viewModel.send() }
+                } label: {
+                    if viewModel.isRunning {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                    }
+                }
+                .disabled(viewModel.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isRunning || viewModel.pendingAction != nil)
+            }
         }
         .padding()
     }

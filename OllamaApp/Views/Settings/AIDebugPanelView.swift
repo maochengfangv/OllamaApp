@@ -4,8 +4,11 @@ struct AIDebugPanelView: View {
     let provider: LLMProvider
     @ObservedObject var manager: OllamaManager
     var memory: any MemoryServicing = MemoryService.shared
+    var evaluationRunner = AIEvaluationRunner()
     @Environment(\.dismiss) private var dismiss
     @State private var memoryItems: [MemoryItem] = []
+    @State private var evaluationResults: [AIEvaluationResult] = []
+    @State private var isRunningEvaluation = false
 
     var body: some View {
         NavigationStack {
@@ -44,6 +47,55 @@ struct AIDebugPanelView: View {
                         reloadMemoryItems()
                     }
                     .disabled(memoryItems.isEmpty)
+                }
+
+                Section("Evaluation") {
+                    keyValueRow("Model", evaluationModel)
+                    keyValueRow("Memory Seed", isMemorySeedReady ? "Ready" : "Missing")
+
+                    if !isMemorySeedReady {
+                        Text("记忆库为空，Memory 类评测会因前置条件不满足而失败。请先写入如“我叫小芳 我是浙江人”这类事实型记忆，再运行内建评测。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button(isRunningEvaluation ? "评测运行中..." : "运行内建评测") {
+                        Task { await runBuiltInEvaluations() }
+                    }
+                    .disabled(isRunningEvaluation)
+
+                    if isRunningEvaluation {
+                        ProgressView()
+                    }
+
+                    if !evaluationResults.isEmpty {
+                        keyValueRow("Pass Rate", "\(passedEvaluationCount) / \(evaluationResults.count)")
+                        ForEach(evaluationResults) { result in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(result.title)
+                                    .font(.body.weight(.medium))
+                                Text(result.isPassed ? "Passed" : "Failed")
+                                    .font(.caption)
+                                    .foregroundStyle(result.isPassed ? .green : .red)
+                                if let memoryHitCount = result.memoryHitCount {
+                                    Text("Memory Hits: \(memoryHitCount)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if let durationMs = result.durationMs {
+                                    Text("Duration: \(durationMs) ms")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if !result.failures.isEmpty {
+                                    Text(result.failures.joined(separator: "\n"))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
                 }
 
                 if let snapshot = manager.latestDebugSnapshot {
@@ -146,6 +198,24 @@ struct AIDebugPanelView: View {
     private func formatCurrency(_ value: Double?) -> String {
         guard let value else { return "N/A" }
         return String(format: "$%.6f", value)
+    }
+
+    private var evaluationModel: String {
+        manager.latestDebugSnapshot?.model ?? provider.defaultModel
+    }
+
+    private var passedEvaluationCount: Int {
+        evaluationResults.filter(\.isPassed).count
+    }
+
+    private var isMemorySeedReady: Bool {
+        !memoryItems.isEmpty
+    }
+
+    private func runBuiltInEvaluations() async {
+        isRunningEvaluation = true
+        defer { isRunningEvaluation = false }
+        evaluationResults = await evaluationRunner.runBuiltInCases(provider: provider, model: evaluationModel)
     }
 
     private func reloadMemoryItems() {

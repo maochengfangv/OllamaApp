@@ -52,6 +52,9 @@ final class AIClient: AIClienting {
         }
     }
 
+    // AIClient 包流：将 Provider 的 AsyncThrowingStream<AIProviderChunk, Error>
+    // 归一化为统一的 AsyncStream<AIResponseEvent>，屏蔽重试/降级/遥测/错误归一化细节。
+    // 上层（Manager）只依赖此流，不感知具体 Provider 与网络实现。
     func responseStream(for request: AIRequest) -> AsyncStream<AIResponseEvent> {
         AsyncStream { continuation in
             let worker = Task {
@@ -144,7 +147,9 @@ final class AIClient: AIClienting {
 
                         do {
                             let providerClient = providerFactory(route)
+                            // Provider 拉 SSE：拿到原始 chunk 流
                             let stream = try await providerClient.responseStream(for: request, context: context)
+                            // 逐 chunk 转发：将 Provider 语义（chunk）翻译为对外事件（AIResponseEvent）
                             for try await chunk in stream {
                                 if Task.isCancelled {
                                     throw CancellationError()
@@ -259,6 +264,8 @@ final class AIClient: AIClienting {
                 )
             }
 
+            // 上层取消或丢弃该流时，级联取消内部 worker，避免网络连接与解析线程泄漏。
+            // 上层取消/丢弃流时，级联取消内部 worker，避免连接泄漏。
             continuation.onTermination = { _ in
                 worker.cancel()
             }

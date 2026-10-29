@@ -137,6 +137,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
             encodedBody = try JSONSerialization.data(withJSONObject: json)
         }
 
+        // Provider 拉 SSE：发起流式请求并逐 chunk yield，返回 AsyncThrowingStream 供 AIClient 包流。
         return AsyncThrowingStream { continuation in
             let worker = Task {
                 do {
@@ -156,6 +157,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                         urlRequest.timeoutInterval = request.timeoutInterval
                         urlRequest.httpBody = encodedBody
 
+                        // URLSession.bytes 支持流式读取，不等待完整响应体
                         let (result, response) = try await URLSession.shared.bytes(for: urlRequest)
                         guard let httpResponse = response as? HTTPURLResponse else {
                             lastError = "DeepSeek 响应异常"
@@ -165,6 +167,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                         if httpResponse.statusCode == 200 {
                             let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
                             if contentType.contains("text/event-stream") {
+                                // SSE 分支：逐行消费 data: 行，边收边解析
                                 try await consumeSSE(
                                     from: result.lines,
                                     previewText: context.previewText,
@@ -204,6 +207,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
         }
     }
 
+    // 逐 chunk 解析：解析 SSE 行（data: {...}），将 delta 拆分为 reasoning / content / tool_calls 后 yield。
     private func consumeSSE<Lines: AsyncSequence>(
         from lines: Lines,
         previewText: String?,
@@ -217,10 +221,12 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                 throw CancellationError()
             }
 
+            // 只处理 SSE 数据行，忽略事件名/空行等协议行
             let trimmed = line.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             guard !trimmed.isEmpty, trimmed.hasPrefix("data:") else { continue }
 
             let payload = String(trimmed.dropFirst(5)).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            // [DONE] 为流结束标记
             if payload == "[DONE]" {
                 break
             }
@@ -243,6 +249,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
             }
 
             if let reasoning = delta.reasoning_content, !reasoning.isEmpty {
+                // 思维链内容单独走 .reasoning，与正文展示分离
                 continuation.yield(.reasoning(reasoning))
             }
 
@@ -252,6 +259,7 @@ struct DeepSeekProviderClient: LLMGeneratingProvider {
                 continuation.yield(.delta("\n\n【回答】\n"))
                 hasYieldedAnswerPrefix = true
             }
+            // 正文增量逐 chunk 交给上层回写
             continuation.yield(.delta(content))
         }
 

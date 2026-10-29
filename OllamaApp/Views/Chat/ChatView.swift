@@ -142,9 +142,13 @@ struct ChatView: View {
         }
     }
 
+    // MARK: - 数据流起点（UI 层发起）
+    // UI 只负责触发意图，不关心网络与解析细节：
+    // UI 发起 -> Manager 持有 Task -> AIClient 包流 -> Provider 拉 SSE -> 逐 chunk 回写。
     private func sendPrompt() {
         let currentPrompt = prompt
         Task {
+            // 把请求委托给 Manager，由其创建并持有长生命周期的 Task。
             await manager.generate(prompt: currentPrompt, model: selectedModel, webEnabled: effectiveWebEnabled)
             prompt = ""
         }

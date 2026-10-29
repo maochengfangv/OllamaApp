@@ -150,6 +150,7 @@ class OllamaManager: ObservableObject {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else { return }
 
+        // UI 层发起后，先本地回写 user 消息 + 占位 model 消息（保证界面立即出现等待态）
         isGenerating = true
         latestUsage = nil
         messages.append(ChatMessage(role: .user, content: trimmedPrompt))
@@ -176,13 +177,18 @@ class OllamaManager: ObservableObject {
             promptOverrides: promptOverrides
         )
         let startDate = Date()
+        // 用 requestID 作为 generationID，确保状态流转幂等（旧任务不污染新上下文）
         let generationID = request.requestID
         currentGenerationID = generationID
         latestDebugSnapshot = makeDebugSnapshot(for: request)
         currentTask?.cancel()
+        // Manager 持有 Task：其生命周期与视图像素无关，View 销毁也不影响生成。
         currentTask = Task {
             var outcome: GenerationOutcome = .completed(nil)
+            // AIClient 返回统一的 AsyncStream<AIResponseEvent>（已完成“包流”）
             let stream = aiClient.responseStream(for: request)
+            // 消费流：逐 chunk 回写。.delta/.preview/.reasoning 增量更新界面，
+            // 其余为控制/元信息事件（usage、memoryContext、终态等）。
             for await event in stream {
                 if Task.isCancelled { break }
                 switch event {
@@ -222,6 +228,7 @@ class OllamaManager: ObservableObject {
         await currentTask?.value
     }
 
+    // 逐 chunk 回写：将流事件映射到 messages 的增量更新（主线程安全，@MainActor）
     private func apply(_ event: AIResponseEvent) {
         guard let lastIndex = messages.indices.last else { return }
 

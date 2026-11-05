@@ -26,7 +26,7 @@ class OllamaManager: ObservableObject {
     ) {
         self.provider = provider
         self.telemetry = telemetry
-        self.aiClient = aiClient ?? AIClient(telemetry: telemetry)
+        self.aiClient = aiClient ?? AIClient.shared
         self.sessionStore = sessionStore ?? ChatSessionStore(
             provider: provider,
             legacyKeys: ["ChatHistory_\(provider.rawValue)"],
@@ -193,9 +193,9 @@ class OllamaManager: ObservableObject {
                 if Task.isCancelled { break }
                 switch event {
                 case .started:
-                    break
+                    resetStreamingBuffer(for: generationID)
                 case .preview, .delta, .reasoning:
-                    apply(event)
+                    apply(event, generationID: generationID)
                 case .usage(let usage):
                     latestUsage = usage
                     latestDebugSnapshot?.usage = usage
@@ -228,8 +228,16 @@ class OllamaManager: ObservableObject {
         await currentTask?.value
     }
 
+    // 重试/降级重新开始时，回滚上一条 model 消息的增量缓冲，避免内容叠加重复
+    private func resetStreamingBuffer(for generationID: UUID) {
+        guard currentGenerationID == generationID, let lastIndex = messages.indices.last else { return }
+        messages[lastIndex].content = ""
+        messages[lastIndex].reasoningContent = nil
+    }
+
     // 逐 chunk 回写：将流事件映射到 messages 的增量更新（主线程安全，@MainActor）
-    private func apply(_ event: AIResponseEvent) {
+    private func apply(_ event: AIResponseEvent, generationID: UUID) {
+        guard currentGenerationID == generationID else { return }
         guard let lastIndex = messages.indices.last else { return }
 
         switch event {

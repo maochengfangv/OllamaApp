@@ -56,7 +56,7 @@ final class AIClient: AIClienting {
     // 归一化为统一的 AsyncStream<AIResponseEvent>，屏蔽重试/降级/遥测/错误归一化细节。
     // 上层（Manager）只依赖此流，不感知具体 Provider 与网络实现。
     func responseStream(for request: AIRequest) -> AsyncStream<AIResponseEvent> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: .bufferingNewest(256)) { continuation in
             let worker = Task {
                 let startDate = Date()
                 let routes = routeSequence(for: request)
@@ -142,6 +142,16 @@ final class AIClient: AIClienting {
 
                         if hasAttempted {
                             retryCount += 1
+                            continuation.yield(.started(
+                                AIResponseStart(
+                                    requestID: request.requestID,
+                                    provider: route,
+                                    model: request.model
+                                )
+                            ))
+                            firstTokenLatencyMs = nil
+                            usage = nil
+                            outputCharacters = 0
                         }
                         hasAttempted = true
 
@@ -225,6 +235,7 @@ final class AIClient: AIClienting {
                             }
 
                             if shouldRetry(error: normalized), attemptIndex < request.retryPolicy.maxRetries {
+                                try? await Task.sleep(for: Self.backoffDelay(for: attemptIndex))
                                 continue
                             }
 
@@ -270,6 +281,14 @@ final class AIClient: AIClienting {
                 worker.cancel()
             }
         }
+    }
+
+    // 指数退避 + 抖动，避免瞬时故障下重试风暴
+    private static func backoffDelay(for attempt: Int) -> Duration {
+        let base = 0.4
+        let exponential = base * pow(2.0, Double(attempt))
+        let jitter = Double.random(in: 0.8...1.2)
+        return .seconds(min(exponential * jitter, 8.0))
     }
 
     private func routeSequence(for request: AIRequest) -> [LLMProvider] {

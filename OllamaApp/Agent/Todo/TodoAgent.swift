@@ -40,7 +40,8 @@ final class TodoAgent {
     private let maxSteps = 5
     private var history: [AIMessage] = []
     private var remainingSteps = 0
-    private(set) var pendingAction: TodoPendingToolAction?
+    private var pendingQueue: [TodoPendingToolAction] = []
+    var pendingAction: TodoPendingToolAction? { pendingQueue.first }
     private let systemPrompt = """
       你是一个待办事项助手。你只能通过提供的工具来操作用户的待办清单，绝不凭空编造或臆测待办内容。
       当用户提出新增、查看、完成、删除待办的诉求时，调用对应工具；一次回复中可以并行调用多个工具。
@@ -50,7 +51,7 @@ final class TodoAgent {
     func reset() {
         history = []
         remainingSteps = 0
-        pendingAction = nil
+        pendingQueue.removeAll()
     }
 
     func send(_ userInput: String, onDelta: ((String) -> Void)? = nil) async throws -> SendOutcome {
@@ -63,18 +64,29 @@ final class TodoAgent {
     }
 
     func confirmPendingAction(onDelta: ((String) -> Void)? = nil) async throws -> SendOutcome {
-        guard let pendingAction else { return .completed("") }
-        let output = TodoToolRunner.run(name: pendingAction.name, argumentsJSON: pendingAction.argumentsJSON)
-        history.append(AIMessage(role: .tool, content: output, toolCallID: pendingAction.toolCallID))
-        self.pendingAction = nil
-        return try await advance(onDelta: onDelta)
+        guard let action = pendingQueue.first else { return .completed("") }
+        let output = TodoToolRunner.run(name: action.name, argumentsJSON: action.argumentsJSON)
+        history.append(AIMessage(role: .tool, content: output, toolCallID: action.toolCallID))
+        pendingQueue.removeFirst()
+        return try await proceedOrContinue(onDelta: onDelta)
     }
 
     func rejectPendingAction(onDelta: ((String) -> Void)? = nil) async throws -> SendOutcome {
-        guard let pendingAction else { return .completed("") }
-        history.append(AIMessage(role: .tool, content: "用户取消了操作：\(pendingAction.title)", toolCallID: pendingAction.toolCallID))
-        self.pendingAction = nil
+        guard let action = pendingQueue.first else { return .completed("") }
+        history.append(AIMessage(role: .tool, content: "用户取消了操作：\(action.title)", toolCallID: action.toolCallID))
+        pendingQueue.removeFirst()
+        return try await proceedOrContinue(onDelta: onDelta)
+    }
+
+    private func proceedOrContinue(onDelta: ((String) -> Void)?) async throws -> SendOutcome {
+        if let next = pendingQueue.first {
+            return .awaitingConfirmation(confirmationMessage(for: next))
+        }
         return try await advance(onDelta: onDelta)
+    }
+
+    private func confirmationMessage(for action: TodoPendingToolAction) -> String {
+        "需要你确认后才能执行：\(action.title)"
     }
 
     private struct CompletionResult {
@@ -90,15 +102,20 @@ final class TodoAgent {
             if !result.toolCalls.isEmpty {
                 history.append(AIMessage(role: .assistant, content: result.content, toolCalls: result.toolCalls))
 
+                var queued: [TodoPendingToolAction] = []
                 for call in result.toolCalls {
                     if let pendingAction = TodoToolRunner.pendingAction(for: call) {
-                        self.pendingAction = pendingAction
-                        let message = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                        return .awaitingConfirmation(message.isEmpty ? "需要你确认后才能执行：\(pendingAction.title)" : message)
+                        queued.append(pendingAction)
+                    } else {
+                        let output = TodoToolRunner.run(name: call.name, argumentsJSON: call.argumentsJSON)
+                        history.append(AIMessage(role: .tool, content: output, toolCallID: call.id))
                     }
+                }
 
-                    let output = TodoToolRunner.run(name: call.name, argumentsJSON: call.argumentsJSON)
-                    history.append(AIMessage(role: .tool, content: output, toolCallID: call.id))
+                if let first = queued.first {
+                    pendingQueue = queued
+                    let message = result.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return .awaitingConfirmation(message.isEmpty ? confirmationMessage(for: first) : message)
                 }
                 continue
             }

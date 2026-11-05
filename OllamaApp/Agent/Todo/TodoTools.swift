@@ -80,6 +80,9 @@ static let toolsJSON = #"""
 
     static func run(name: String, argumentsJSON: String) -> String {
         let args = (try? JSONSerialization.jsonObject(with: Data(argumentsJSON.utf8))) as? [String: Any] ?? [:]
+        if let validationError = validate(name: name, arguments: args) {
+            return validationError
+        }
         switch name {
         case "add_todo":
             let  title = (args["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,6 +102,28 @@ static let toolsJSON = #"""
         default:
             return "未知工具\(name)"
         }
+    }
+
+    private static func validate(name: String, arguments: [String: Any]) -> String? {
+        switch name {
+        case "add_todo":
+            guard let title = arguments["title"] as? String,
+                  !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return "参数校验失败：add_todo 需要非空的 title（string）"
+            }
+        case "list_todos":
+            if let includeDone = arguments["include_done"], !(includeDone is Bool) {
+                return "参数校验失败：list_todos 的 include_done 必须是 boolean"
+            }
+        case "complete_todo", "delete_todo":
+            guard let key = arguments["key"] as? String,
+                  !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return "参数校验失败：\(name) 需要非空的 key（string）"
+            }
+        default:
+            return nil
+        }
+        return nil
     }
 
     private static func actionTitle(name: String, argumentsJSON: String) -> String {
